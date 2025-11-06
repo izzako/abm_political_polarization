@@ -12,13 +12,46 @@ def _get_first_activity(text_data,interaction_data,author_id):
     - Who is the target of the interaction
     - Interaction Text
     '''
-    first_interaction = interaction_data[interaction_data['source_author'] == author_id].iloc[0]
-    first_text = text_data[text_data['author']==author_id].iloc[0]
 
-    if first_interaction['datetime'] <= first_text['datetime']:
+    filtered_interaction = interaction_data[interaction_data['source_author'] == author_id]
+    filtered_text = text_data[text_data['author'] == author_id]
+
+    # Initialize as None
+    first_interaction = None
+    first_text = None
+
+    # Get first row if DF not empty
+    if not filtered_interaction.empty:
+        first_interaction = filtered_interaction.iloc[0]
+    if not filtered_text.empty:
+        first_text = filtered_text.iloc[0]
+
+    if first_interaction is None and first_text is None:
+        return None  # or customize your 'no activity' output
+
+    if first_interaction is None and first_text is not None:
+        activity_type = first_text['interaction_type']
+        return {
+            'activity_type': activity_type,
+            'target_author': None,
+            'first_activity_datetime': first_text['datetime'],
+            'target_text': None,
+            'target_weight': None,
+            'source_text': first_text['text'],
+            'source_weight': sentiment_map[first_text['sentiment_label']],
+            'likes_count': first_text['likes_count'],
+            'reposts_count': first_text['reposts_count'],
+        }
+    
+    # Only interaction
+    if first_text is None and first_interaction is not None:
         activity_type = first_interaction['interaction_type']
     else:
-        activity_type = first_text['interaction_type']
+        # Both present, pick earliest by datetime
+        if first_interaction['datetime'] <= first_text['datetime']: # pyright: ignore[reportOptionalSubscript]
+            activity_type = first_interaction['interaction_type'] 
+        else:
+            activity_type = first_text['interaction_type']
 
     if activity_type == 'retweet':
         

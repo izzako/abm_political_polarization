@@ -17,7 +17,35 @@ class Agent:
         }
         self.memory = []
 
-    def initialize(self,first_activity):
+    def to_dict(self):
+        """Convert agent state to dictionary for JSON serialization."""
+        return {
+            "name": self.name,
+            "traits": self.traits,
+            "opinion_weight": self.opinion_weight,
+            "memory": self.memory
+        }
+    
+    def save_json(self, filepath):
+        """Save agent state as JSON file."""
+        filepath = Path(filepath)
+        filepath.parent.mkdir(parents=True, exist_ok=True)
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(self.to_dict(), f, ensure_ascii=False, indent=2)
+    
+    @classmethod
+    def from_json(cls, filepath):
+        """Load agent state from JSON file."""
+        with open(filepath, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            persona = data['traits']
+            persona['author']=data['name']
+        agent = cls(persona)
+        agent.opinion_weight = data.get("opinion_weight", 0)
+        agent.memory = data.get("memory", [])
+        return agent
+
+    def initialize(self, first_activity: dict):
         '''
         Initialize agents initial opinion and memory
         '''
@@ -55,30 +83,11 @@ because i agree with it. '''
                 'memory':initial_memory
             }
         )
-    def to_dict(self):
-        """Convert agent state to dictionary for JSON serialization."""
-        return {
-            "name": self.name,
-            "traits": self.traits,
-            "opinion_weight": self.opinion_weight,
-            "memory": self.memory
-        }
     
-    def save_json(self, filepath):
-        """Save agent state as JSON file."""
-        filepath = Path(filepath)
-        filepath.parent.mkdir(parents=True, exist_ok=True)
-        with open(filepath, "w", encoding="utf-8") as f:
-            json.dump(self.to_dict(), f, ensure_ascii=False, indent=2)
-    
-    @classmethod
-    def from_json(cls, filepath):
-        """Load agent state from JSON file."""
-        with open(filepath, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            persona = data['traits']
-            persona['author']=data['name']
-        agent = cls(persona)
-        agent.opinion_weight = data.get("opinion_weight", 0)
-        agent.memory = data.get("memory", [])
-        return agent
+    def update_memory(self, new_activity: dict):
+        '''
+        Update memory with new activity
+        '''
+        self.memory.append(
+            new_activity
+        )

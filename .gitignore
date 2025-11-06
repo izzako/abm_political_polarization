@@ -209,3 +209,4 @@ __marimo__/
 # custom
 *.ipynb
 .DS_Store
+persona/user_*
