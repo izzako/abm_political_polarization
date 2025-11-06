@@ -1,0 +1,84 @@
+from .const import *
+from .utils import *
+
+import json
+from pathlib import Path
+from datetime import datetime
+
+class Agent:
+    def __init__(self, persona: dict):
+
+        # initiate persona from author_data
+        self.name = persona['author']
+        self.traits = {
+            'gender'         : persona['gender'],
+            'followers_count': persona['followers_count'],
+            'following_count': persona['following_count']
+        }
+        self.memory = []
+
+    def initialize(self,first_activity):
+        '''
+        Initialize agents initial opinion and memory
+        '''
+        # first_activity = get_first_activity(self.name)
+
+        ## Initialize opinion
+        self.opinion_weight = INIT_OPINION_NORMALIZATION*first_activity['source_weight']
+
+        ## Initialize memory
+        if first_activity['activity_type'] == 'reply':
+            initial_memory = f'''I replied to a user that said:
+"{first_activity['target_text']}"
+
+which was a {inverse_sentiment_map[first_activity['target_weight']]} sentiment, with this: 
+"{first_activity["source_text"]}"'''
+
+        elif first_activity['activity_type'] == 'retweet':
+            initial_memory = f'''I retweeted a user that said:
+"{first_activity['target_text']}"
+because i agree with it. '''
+        
+        elif first_activity['activity_type'] == 'original':
+            num_of_likes = first_activity['likes_count']
+            num_of_retweets = first_activity['reposts_count']
+            if num_of_likes >= num_of_retweets:
+                public_impressions = "good impressions from public"
+            else:
+                public_impressions = "controversial impressions from public"
+
+            initial_memory = f'''I recently write a tweet:
+{first_activity['source_text']}, it gains {public_impressions}.'''
+        self.memory.append(
+            {
+                'datetime':datetime.strftime(first_activity['first_activity_datetime'], '%Y-%m-%d %H:%M:%S'),
+                'memory':initial_memory
+            }
+        )
+    def to_dict(self):
+        """Convert agent state to dictionary for JSON serialization."""
+        return {
+            "name": self.name,
+            "traits": self.traits,
+            "opinion_weight": self.opinion_weight,
+            "memory": self.memory
+        }
+    
+    def save_json(self, filepath):
+        """Save agent state as JSON file."""
+        filepath = Path(filepath)
+        filepath.parent.mkdir(parents=True, exist_ok=True)
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(self.to_dict(), f, ensure_ascii=False, indent=2)
+    
+    @classmethod
+    def from_json(cls, filepath):
+        """Load agent state from JSON file."""
+        with open(filepath, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            persona = data['traits']
+            persona['author']=data['name']
+        agent = cls(persona)
+        agent.opinion_weight = data.get("opinion_weight", 0)
+        agent.memory = data.get("memory", [])
+        return agent
