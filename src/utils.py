@@ -1,7 +1,15 @@
 
 import pandas as pd
+from datetime import datetime,timedelta
+import re
 
 from .const import *
+
+def preprocess_text(text):
+    text = re.sub('https','',text)
+    text = re.sub('https','',text)
+    return text
+
 
 def _get_first_activity(text_data,interaction_data,author_id):
     '''
@@ -96,4 +104,48 @@ def _get_first_activity(text_data,interaction_data,author_id):
             'reposts_count': first_text['reposts_count'],
         }
     
-# get_first_activity = partial(_get_first_activity,text_data,interaction_data)
+def datetime_range(start, end, step_minutes=15):
+    current = start
+    step = timedelta(minutes=step_minutes)
+    while current <= end:
+        yield current
+        current += step
+
+
+def create_retweet_memory(text):
+    return f'''I retweeted a user that said:
+"{text}"
+because i agree with it. '''
+
+def create_original_memory(text,likes_count,reposts_count):
+    num_of_likes = likes_count
+    num_of_retweets = reposts_count
+    if num_of_likes >= num_of_retweets:
+        public_impressions = "good impressions from public"
+    else:
+        public_impressions = "controversial impressions from public"
+
+    if num_of_likes+num_of_retweets == 0:
+        public_impressions = "no impressions from public"
+    return f'''I wrote a tweet:
+{text}, 
+it gains {public_impressions}.'''
+
+def create_reply_memory(source_text,target_text,target_weight):
+    return f'''I replied to a user that said:
+"{target_text}"
+
+which was a {inverse_sentiment_map[target_weight]} sentiment, with this: 
+"{source_text}"'''
+
+
+def load_prompt(file_path):
+    """
+    Loads the prompt of a Markdown file from the given path.
+    """
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"The file at path '{file_path}' does not exist.")
+    
+    with open(file_path, 'r', encoding='utf-8') as f:
+        markdown_content = f.read()
+    return markdown_content

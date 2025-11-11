@@ -56,27 +56,17 @@ class Agent:
 
         ## Initialize memory
         if first_activity['activity_type'] == 'reply':
-            initial_memory = f'''I replied to a user that said:
-"{first_activity['target_text']}"
-
-which was a {inverse_sentiment_map[first_activity['target_weight']]} sentiment, with this: 
-"{first_activity["source_text"]}"'''
+            initial_memory = create_reply_memory(first_activity["source_text"],
+                                                 first_activity['target_text'],
+                                                 first_activity['target_weight'])
 
         elif first_activity['activity_type'] == 'retweet':
-            initial_memory = f'''I retweeted a user that said:
-"{first_activity['target_text']}"
-because i agree with it. '''
+            initial_memory = create_retweet_memory(first_activity['target_text'])
         
         elif first_activity['activity_type'] == 'original':
-            num_of_likes = first_activity['likes_count']
-            num_of_retweets = first_activity['reposts_count']
-            if num_of_likes >= num_of_retweets:
-                public_impressions = "good impressions from public"
-            else:
-                public_impressions = "controversial impressions from public"
-
-            initial_memory = f'''I recently write a tweet:
-{first_activity['source_text']}, it gains {public_impressions}.'''
+            initial_memory = create_original_memory(first_activity['source_text'],
+                                                    first_activity['likes_count'],
+                                                    first_activity['reposts_count'])
         self.memory.append(
             {
                 'datetime':datetime.strftime(first_activity['first_activity_datetime'], '%Y-%m-%d %H:%M:%S'),
@@ -91,3 +81,9 @@ because i agree with it. '''
         self.memory.append(
             new_activity
         )
+
+    def update_opinion_weight(self, new_value: float):
+        '''
+        Update opinion weight
+        '''
+        self.opinion_weight = new_value

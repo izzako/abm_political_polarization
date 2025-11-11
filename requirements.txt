@@ -4,3 +4,6 @@ requests
 python-dotenv
 pyarrow
 fastparquet
+langchain
+langchain-community
+langchain-openai
