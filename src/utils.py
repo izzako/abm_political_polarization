@@ -111,31 +111,38 @@ def datetime_range(start, end, step_minutes=15):
         yield current
         current += step
 
-
 def create_retweet_memory(text):
-    return f'''I retweeted a user that said:
+    return f'''I retweeted a post that said:
 "{text}"
-because i agree with it. '''
+because I agreed with its message.'''
 
-def create_original_memory(text,likes_count,reposts_count):
+def create_original_memory(text, likes_count, reposts_count):
     num_of_likes = likes_count
     num_of_retweets = reposts_count
-    if num_of_likes >= num_of_retweets:
-        public_impressions = "good impressions from public"
+    
+    if num_of_likes + num_of_retweets == 0:
+        public_impressions = "no public engagement"
+    elif num_of_likes >= num_of_retweets:
+        public_impressions = "mostly positive reactions"
     else:
-        public_impressions = "controversial impressions from public"
-
-    if num_of_likes+num_of_retweets == 0:
-        public_impressions = "no impressions from public"
+        public_impressions = "mixed or controversial reactions"
+    
     return f'''I wrote a tweet:
-{text}, 
-it gains {public_impressions}.'''
+"{text}"
+It received {public_impressions}.'''
 
-def create_reply_memory(source_text,target_text,target_weight):
-    return f'''I replied to a user that said:
+def create_reply_memory(source_text, target_text, target_weight):
+    return f'''I replied to a post that said:
 "{target_text}"
 
-which was a {inverse_sentiment_map[target_weight]} sentiment, with this: 
+It expressed a {inverse_sentiment_map[target_weight]} sentiment, and I responded with:
+"{source_text}"'''
+
+def create_reply_memory_without_weight(source_text, target_text):
+    return f'''I replied to a post that said:
+"{target_text}"
+
+I responded with:
 "{source_text}"'''
 
 
@@ -149,3 +156,18 @@ def load_prompt(file_path):
     with open(file_path, 'r', encoding='utf-8') as f:
         markdown_content = f.read()
     return markdown_content
+
+
+def track_updated_opinions(df, updates, timestep):
+    """
+    updates = dict of agent -> new_opinion_weight
+    """
+    prev = df[df['time_step'] == timestep - timedelta(minutes=minutes_step)]
+    next_step = prev.copy()
+    next_step['time_step'] = timestep
+    
+    # Apply updates
+    for agent, new_val in updates.items():
+        next_step.loc[next_step['agent'] == agent, 'opinion_weight'] = new_val
+    
+    return pd.concat([df, next_step], ignore_index=True)

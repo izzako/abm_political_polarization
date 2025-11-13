@@ -15,10 +15,13 @@ if not os.environ.get("OPENAI_API_KEY"):
 config = ConfigParser()
 config.read(Path(__file__).parent.parent.joinpath('config.ini'))
 
-# INTERNAL CONSTANTS
+# INTERNAL CONSTANTS - CLOSELY RELATED WITH DATASET
 sentiment_map = {'positive':1,'negative':-1,'neutral':0}
 inverse_sentiment_map = {1:'positive',-1:'negative',0:'neutral',None:'unknown'}
 minutes_step = 15 # depends on data datetime granularity
+topics = ['pemilu / curang / presiden', 'prabowo / jokowi / dukung',
+       'ganjar / mahfud / putar', 'anies / amin / ubah',
+       'count / quick / quick_count']
 
 # ADJUSTABLE CONTSANTS FROM CONFIG
 INIT_OPINION_NORMALIZATION = float(config['AGENTS']['INIT_OPINION_NORMALIZATION'])

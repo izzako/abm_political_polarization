@@ -4,6 +4,7 @@ from .utils import *
 import json
 from pathlib import Path
 from datetime import datetime
+import numpy as np
 
 class Agent:
     def __init__(self, persona: dict):
@@ -82,8 +83,8 @@ class Agent:
             new_activity
         )
 
-    def update_opinion_weight(self, new_value: float):
+    def update_opinion_weight(self, delta_value: float):
         '''
         Update opinion weight
         '''
-        self.opinion_weight = new_value
+        self.opinion_weight = round(np.tanh(self.opinion_weight+delta_value),2)
