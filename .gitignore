@@ -210,3 +210,5 @@ __marimo__/
 *.ipynb
 .DS_Store
 persona/user_*
+outputs/
+logs/

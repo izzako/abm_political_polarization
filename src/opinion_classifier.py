@@ -26,11 +26,8 @@ class OpinionClassifierSchema(BaseModel):
     delta_opinion: float = Field(description="Ranging from -1 (strong negative shift) to 0 (no change) to 1 (strong positive shift)")
 
 class OpinionClassifier:
-    def __init__(self, model_name :str, temperature: float):
-        self.llm = ChatOpenAI(
-            model=model_name,
-            temperature=temperature,
-        )
+    def __init__(self, llm : ChatOpenAI):
+        self.llm = llm
         self.structured_llm = self.llm.with_structured_output(OpinionClassifierSchema)
 
     def classify(self, agent: Agent , new_activity: dict):
