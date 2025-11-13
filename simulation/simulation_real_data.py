@@ -42,12 +42,12 @@ if 'gpt' in srconst.model_name.lower():
     modelname = srconst.model_name.lower()
 
 elif 'qwen' in srconst.model_name.lower():
-    inference_server_url = "http://localhost:8000/v1"
+    
 
     llm = ChatOpenAI(
         model=srconst.model_name,
         openai_api_key="EMPTY",
-        openai_api_base=inference_server_url,
+        openai_api_base=srconst.inference_server_url,
         # max_tokens=5,
         temperature=srconst.temperature,
     )

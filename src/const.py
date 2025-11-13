@@ -32,7 +32,9 @@ data_start_datetime = datetime.strptime(config['SIMULATION']['data_start_datetim
 data_end_datetime = datetime.strptime(config['SIMULATION']['data_end_datetime'], '%Y-%m-%d %H:%M:%S')
 
 
+
 # OPINION CLASSIFIER MODEL
 model_name = config['MODEL']['model_name']
 temperature = float(config['MODEL']['temperature'])
 prompt_path = config['PROMPT_PATH']['prompt_path']
+inference_server_url = config['MODEL']['inference_server_url']
