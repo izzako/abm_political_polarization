@@ -30,6 +30,7 @@ author_data = config['DATA_PATH']['author_data']
 interaction_data = config['DATA_PATH']['interaction_data']
 data_start_datetime = datetime.strptime(config['SIMULATION']['data_start_datetime'], '%Y-%m-%d %H:%M:%S')
 data_end_datetime = datetime.strptime(config['SIMULATION']['data_end_datetime'], '%Y-%m-%d %H:%M:%S')
+track_every = int(config['SIMULATION']['track_every'])
 
 
 

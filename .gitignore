@@ -212,3 +212,4 @@ __marimo__/
 persona/user_*
 outputs/
 logs/
+*.o1*

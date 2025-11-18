@@ -46,8 +46,8 @@ elif 'qwen' in srconst.model_name.lower():
 
     llm = ChatOpenAI(
         model=srconst.model_name,
-        openai_api_key="EMPTY",
-        openai_api_base=srconst.inference_server_url,
+        openai_api_key="EMPTY",  # type: ignore
+        openai_api_base=srconst.inference_server_url, # type: ignore
         # max_tokens=5,
         temperature=srconst.temperature,
     )
@@ -123,7 +123,7 @@ for user in tqdm(author_data['author'],desc='Adding agents weight to tracker'):
 
 
 opinion_shift_df = pd.DataFrame(opinion_shift_dict)
-os.makedirs(OUTPUT_DIR,exist_ok=True)
+
 
 
 start = srconst.data_start_datetime
@@ -138,23 +138,23 @@ logging.info(f"Set simulation step: {step}")
 logging.info(f"Total simulation steps: {total}")
 
 
-iter = 0
-num_of_text_data_iter = []
-num_of_interaction_data_iter = []
+k = 0
+# num_of_text_data_iter = []
+# num_of_interaction_data_iter = []
 timestep = []
-track_every = 96 # step (1 step = 15 minutes)
+track_every = srconst.track_every # step (1 step = 15 minutes)
 
 logging.info(f"Progress will be tracked every {track_every} steps")
 
 with ctx as cb: 
     for time_step in tqdm(srcutils.datetime_range(start,end),total=total,desc='Simulation'):
-        iter +=1
+        k +=1
         step_text_data = sim_text_data[(sim_text_data['datetime']==time_step)& (sim_text_data['interaction_type']=='original')]
         step_interaction_data = sim_interaction_data[sim_interaction_data['datetime']==time_step]
         
         timestep.append(time_step)
-        num_of_text_data_iter.append(len(step_text_data))
-        num_of_interaction_data_iter.append(len(step_interaction_data))
+        # num_of_text_data_iter.append(len(step_text_data))
+        # num_of_interaction_data_iter.append(len(step_interaction_data))
         
         batch_agents = []
         batch_new_activity = []
@@ -202,20 +202,27 @@ with ctx as cb:
             # save
             weight_updates = {}
             for agent, new_activity,reasoning, delta_opinion in zip(batch_agents,batch_new_activity,batch_reasoning,batch_delta):
-                new_activity['memory'] += '\n'+reasoning
-                agent.update_opinion_weight(delta_opinion)
+                if reasoning:
+                    new_activity['memory'] += '\n'+reasoning
+                else:
+                    logging.error(f"Error on agent {agent.name} at {time_step}")
                 agent.update_memory(new_activity)
+                agent.update_opinion_weight(delta_opinion)
                 agent.save_json(f'persona/{agent.name}.json')
                 weight_updates[agent.name]=agent.opinion_weight
             opinion_shift_df = srcutils.track_updated_opinions(opinion_shift_df,weight_updates,time_step)
             
-            # save periodically
-            if iter % track_every == 0:
-                logging.info(f"{iter}/{total} steps, current weight updated: {weight_updates}")
-                opinion_shift_df.to_csv(os.path.join(OUTPUT_DIR,f'opinion_shift_step_{iter}/{total}.csv'),
-                                            index=False,
-                                            sep=';')
-        else: continue
+        else: 
+            weight_updates={}
+            opinion_shift_df = srcutils.track_updated_opinions(opinion_shift_df,weight_updates,time_step)
+        
+        # save periodically
+        if k % track_every == 0:
+            logging.info(f"{k}/{total} steps, current weight updated: {weight_updates}")
+            opinion_shift_df.to_csv(os.path.join(OUTPUT_DIR,f'opinion_shift_step_{k}_{total}.csv'),
+                                        index=False,
+                                        sep=';')
+            
 
 if 'gpt' in modelname:
     openai_usage = {
@@ -225,5 +232,5 @@ if 'gpt' in modelname:
         "Completion Tokens": cb.completion_tokens,
         "Total Cost (USD)": f"${cb.total_cost:.4f}"
     }
-    with open(os.path.join(LOG_DIR),'w') as f:
+    with open(os.path.join(LOG_DIR,'openai_usage.log'),'w') as f:
         json.dump(openai_usage,f,ensure_ascii=False,indent=4)

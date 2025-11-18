@@ -15,7 +15,7 @@ Think carefully about how this activity will likely change my current opinion ab
 
 Output (strictly in JSON format, no markdown or extra text):
 
-Provide a brief, first-person explanation (1-2 sentence) of why my opinion would shift as a result of this activity (or why there is little to no shift).
+Provide a brief, first-person explanation (1 sentence) of why my opinion would shift as a result of this activity (or why there is little to no shift).
 
 Output a float number ("delta_opinion"), ranging from -1 (strong negative shift) to 0 (no change) to 1 (strong positive shift), representing the relative change in my opinion after this activity.
 
