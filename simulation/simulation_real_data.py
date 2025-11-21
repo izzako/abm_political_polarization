@@ -48,9 +48,10 @@ elif 'qwen' in srconst.model_name.lower():
         model=srconst.model_name,
         openai_api_key="EMPTY",  # type: ignore
         openai_api_base=srconst.inference_server_url, # type: ignore
-        # max_tokens=5,
+        max_retries=3,
         temperature=srconst.temperature,
     )
+    llm = llm.bind(max_tokens=16384)
     ctx=nullcontext()
     modelname = srconst.model_name.lower().replace('/','_')
 

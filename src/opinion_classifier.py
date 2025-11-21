@@ -16,9 +16,7 @@ oc_template =  PromptTemplate(
             'following_count',
             'current_opinion_weight',
             'memories',
-            'activity_type',
             'activity_content'
-
         ],
     )
 
@@ -31,6 +29,7 @@ class OpinionClassifier:
     def __init__(self, llm : ChatOpenAI):
         self.llm = llm
         self.structured_llm = self.llm.with_structured_output(OpinionClassifierSchema)
+                                                              
 
     def classify(self, agent: Agent , new_activity: dict):
         prompt = oc_template.format(
@@ -44,7 +43,7 @@ class OpinionClassifier:
 
        
         results = self.structured_llm.invoke(prompt)
-        return results.reasoning, results.delta_opinion
+        return results.reasoning, results.delta_opinion # type: ignore
     
     def batch_classify(self, list_of_agent: list[Agent], list_of_new_activity: list[dict], batch_size: int = 10):
         

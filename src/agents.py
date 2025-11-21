@@ -87,4 +87,4 @@ class Agent:
         '''
         Update opinion weight
         '''
-        self.opinion_weight = round(np.tanh(self.opinion_weight+delta_value),2)
+        self.opinion_weight = round(np.tanh(self.opinion_weight+(learning_rate*delta_value)),2)

@@ -17,8 +17,8 @@
 # Combine output and error files into a single file
 #$ -j y
 
-# Request 2 core
-#$ -pe omp 2
+# Request 4 core
+#$ -pe omp 4
 
 # Request 2 GPU 
 #$ -l gpus=2
@@ -41,9 +41,14 @@ module load cuda/12.2 gcc/12.2.0 python3/3.10.12
 set -a
 source .env
 set +a
-
+vllm serve ... 
 source /projectnb/llamagrp/izzan/env/bin/activate
-nohup vllm serve Qwen/Qwen3-8B --reasoning-parser deepseek_r1 --tensor-parallel-size 2 > logs/vllm.log 2>&1 &
+nohup vllm serve Qwen/Qwen3-8B \
+    --reasoning-parser deepseek_r1 \
+    --tensor-parallel-size 2 \
+    --rope-scaling '{"rope_type":"yarn","factor":4.0,"original_max_position_embeddings":32768}' \
+    --max-model-len 131072 \
+    > logs/vllm.log 2>&1 &
 
 echo "Starting vLLM... waiting for server to become ready."
 
