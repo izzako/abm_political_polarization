@@ -5,6 +5,21 @@ import json
 from pathlib import Path
 from datetime import datetime
 import numpy as np
+from pydantic import BaseModel, Field
+from langchain_core.prompts.prompt import PromptTemplate
+from langchain_openai import ChatOpenAI
+
+
+class MemorySummarySchema(BaseModel):
+    summary: str = Field(description="Brief explanation")
+
+
+summarize_template =  PromptTemplate(
+        template= load_prompt(prompt_path+'/memory_summarization.md'),
+        input_variables=[
+            'memories'
+        ],
+    )
 
 class Agent:
     def __init__(self, persona: dict):
@@ -17,6 +32,10 @@ class Agent:
             'following_count': persona['following_count']
         }
         self.memory = []
+        self.summarized_memory = {
+                                    'recency':0,
+                                    'memory': None
+                                }
 
     def to_dict(self):
         """Convert agent state to dictionary for JSON serialization."""
@@ -75,13 +94,21 @@ class Agent:
             }
         )
     
-    def update_memory(self, new_activity: dict):
+    def update_memory(self, llm : ChatOpenAI ,new_activity: dict, summarize_past = 5):
         '''
         Update memory with new activity
         '''
         self.memory.append(
             new_activity
         )
+        
+        if (len(self.memory) >= summarize_past) and (len(self.memory) % summarize_past==0):
+            # summarize memory
+            structured_llm = llm.with_structured_output(MemorySummarySchema)
+            prompt = summarize_template.format(memories=self.memory[(-1*summarize_past):])
+            results = structured_llm.invoke(prompt)
+            self.summarized_memory['memory'] = results.summary # type: ignore
+            self.summarized_memory['recency'] = len(self.memory)
 
     def update_opinion_weight(self, delta_value: float):
         '''

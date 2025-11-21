@@ -37,7 +37,7 @@ class OpinionClassifier:
                                     followers_count = agent.traits['followers_count'],
                                     following_count = agent.traits['following_count'],
                                     current_opinion_weight = agent.opinion_weight,
-                                    memories = agent.memory[-3:], #take the latest three memory
+                                    memories = agent.summarized_memory['memory'] if agent.summarized_memory['memory'] else agent.memory, #take the latest three memory
                                     activity_content = new_activity['memory']
                                 )
 
@@ -71,18 +71,18 @@ class OpinionClassifier:
                     followers_count=agent.traits["followers_count"],
                     following_count=agent.traits["following_count"],
                     current_opinion_weight=agent.opinion_weight,
-                    memories=agent.memory,
-                    activity_content=new_activity["memory"],
+                    memories= agent.summarized_memory['memory'] if agent.summarized_memory['memory'] else agent.memory,
+                    activity_content= new_activity["memory"], # type: ignore
                 )
                 for agent, new_activity in zip(agent_batch, activity_batch)
             ]
 
             try:
-                results = self.structured_llm.batch(inputs, config={"max_concurrency": 5})
-                batch_reasoning_all.extend([r.reasoning for r in results])
-                batch_delta_all.extend([r.delta_opinion for r in results])
+                results = self.structured_llm.batch(inputs, config={"max_concurrency": 5}) # type: ignore
+                batch_reasoning_all.extend([r.reasoning for r in results]) # type: ignore
+                batch_delta_all.extend([r.delta_opinion for r in results]) # type: ignore
             except Exception as e:
-                print(f"[Batch] Error: {e}")
+                # print(f"[Batch] Error: {e}")
                 batch_reasoning_all.extend([None] * len(agent_batch))
                 batch_delta_all.extend([0] * len(agent_batch))
 
