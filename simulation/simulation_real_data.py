@@ -17,6 +17,7 @@ logging.getLogger("uvicorn").setLevel(logging.WARNING)  # optional
 from pathlib import Path
 import os, sys
 from tqdm import tqdm
+import time
 
 from langchain_community.callbacks import get_openai_callback
 from langchain_openai import ChatOpenAI
@@ -36,8 +37,13 @@ os.makedirs(OUTPUT_DIR,exist_ok=True)
 if 'gpt' in srconst.model_name.lower():
     llm = ChatOpenAI(
                 model = srconst.model_name,
-                temperature=srconst.temperature
+                temperature=srconst.temperature,
+                max_retries=3,
+                timeout=60,
+                frequency_penalty = 0.0,
+                presence_penalty=0.0
             )
+    llm = llm.bind(max_tokens=32768)
     ctx = get_openai_callback()
     modelname = srconst.model_name.lower()
 
@@ -49,26 +55,32 @@ elif 'qwen' in srconst.model_name.lower():
         openai_api_key="EMPTY",  # type: ignore
         openai_api_base=srconst.inference_server_url, # type: ignore
         max_retries=3,
+        timeout=60,
+        model_kwargs={
+            "frequency_penalty": 0.0,
+            "presence_penalty": 0.0,
+        },
         temperature=srconst.temperature,
     )
-    llm = llm.bind(max_tokens=16384)
+    llm = llm.bind(max_tokens=32768)
     ctx=nullcontext()
     modelname = srconst.model_name.lower().replace('/','_')
 
 oc = OpinionClassifier(llm)
 
 logging.basicConfig(level=logging.INFO,
-                    format="{asctime} : {levelname} : {message}",
+                    format="[{asctime}] {levelname} {name} : {message}",
                     style="{",
-                    datefmt="%Y-%m-%d %H:%M",
+                    datefmt="%Y-%m-%d %H:%M:%S",
                     filename=os.path.join(LOG_DIR,f"simulation_{modelname}.log"),
                     encoding="utf-8",
                     filemode="w")
 
-logging.info(f"Set opinion classifier model: {srconst.model_name.lower()}")
+logger = logging.getLogger(__name__)
+logger.info(f"Set opinion classifier model: {srconst.model_name.lower()}")
 
 # LOAD DATA
-logging.info("Loading data...")
+logger.info("Loading data...")
 
 text_data = pd.read_parquet(srconst.text_data)
 author_data = pd.read_parquet(srconst.author_data)
@@ -79,7 +91,7 @@ text_data.set_index('tweet_id',inplace=True)
 
 # filter text with specific topics
 
-logging.info(f"Filter text with specific topics: {srconst.topics[0]}")
+logger.info(f"Filter text with specific topics: {srconst.topics[0]}")
 
 sim_text_data = text_data[text_data['topic_label']==srconst.topics[0]].copy()
 
@@ -90,7 +102,7 @@ sim_interaction_data = sim_interaction_data[~((sim_interaction_data['interaction
 
 
 # INITATE AGENTS
-logging.info(f"Initate agents data...")
+logger.info(f"Initate agents data...")
 for user in tqdm(author_data['author'],desc='Initiating agents'):
     first_activity = srcutils._get_first_activity(sim_text_data,sim_interaction_data,user)
     if first_activity:
@@ -108,7 +120,7 @@ sim_interaction_data = sim_interaction_data[sim_interaction_data['source_author'
 
 # INITIATE TRACKER
 
-logging.info(f"Initate tracker data, outputs on: {OUTPUT_DIR}")
+logger.info(f"Initate tracker data, outputs on: {OUTPUT_DIR}")
 
 opinion_shift_dict = {
     'time_step':[],
@@ -133,10 +145,10 @@ step = timedelta(minutes=srconst.minutes_step)
 
 total = int((end - start) / step) + 1
 
-logging.info(f"Set simulation start date on: {start}")
-logging.info(f"Set simulation end date on: {end}")
-logging.info(f"Set simulation step: {step}")
-logging.info(f"Total simulation steps: {total}")
+logger.info(f"Set simulation start date on: {start}")
+logger.info(f"Set simulation end date on: {end}")
+logger.info(f"Set simulation step: {step}")
+logger.info(f"Total simulation steps: {total}")
 
 
 k = 0
@@ -145,11 +157,12 @@ k = 0
 timestep = []
 track_every = srconst.track_every # step (1 step = 15 minutes)
 
-logging.info(f"Progress will be tracked every {track_every} steps")
+logger.info(f"Progress will be tracked every {track_every} steps")
 
 with ctx as cb: 
     for time_step in tqdm(srcutils.datetime_range(start,end),total=total,desc='Simulation'):
         k +=1
+        if k>80: break
         step_text_data = sim_text_data[(sim_text_data['datetime']==time_step)& (sim_text_data['interaction_type']=='original')]
         step_interaction_data = sim_interaction_data[sim_interaction_data['datetime']==time_step]
         
@@ -194,20 +207,21 @@ with ctx as cb:
         if len(batch_new_activity)>0:
             
             # opinion classifier
-            
+            invoke_start = time.time()
             batch_reasoning, batch_delta = oc.batch_classify(
                 list_of_agent=batch_agents,
                 list_of_new_activity=batch_new_activity
             )
-            
+            invoke_end = time.time()
+            invoke_time = round(invoke_end - invoke_start)
             # save
             weight_updates = {}
             for agent, new_activity,reasoning, delta_opinion in zip(batch_agents,batch_new_activity,batch_reasoning,batch_delta):
                 if reasoning:
                     new_activity['memory'] += '\n'+reasoning
                 else:
-                    logging.error(f"Error on agent {agent.name} at {time_step}")
-                agent.update_memory(new_activity)
+                    logger.error(f"Error on agent {agent.name} at {time_step}")
+                agent.update_memory(llm,new_activity)
                 agent.update_opinion_weight(delta_opinion)
                 agent.save_json(f'persona/{agent.name}.json')
                 weight_updates[agent.name]=agent.opinion_weight
@@ -219,19 +233,20 @@ with ctx as cb:
         
         # save periodically
         if k % track_every == 0:
-            logging.info(f"{k}/{total} steps, current weight updated: {weight_updates}")
+            logger.info(f"{k}/{total} steps, Invoke time: {invoke_time}s,current weight updated: {weight_updates}")
             opinion_shift_df.to_csv(os.path.join(OUTPUT_DIR,f'opinion_shift_step_{k}_{total}.csv'),
                                         index=False,
                                         sep=';')
             
 
-if 'gpt' in modelname:
-    openai_usage = {
-        'Run Information': f"{srconst.model_name}: {start} - {end}",
-        "Total Tokens": cb.total_tokens,
-        "Prompt Tokens": cb.prompt_tokens,
-        "Completion Tokens": cb.completion_tokens,
-        "Total Cost (USD)": f"${cb.total_cost:.4f}"
-    }
-    with open(os.path.join(LOG_DIR,'openai_usage.log'),'w') as f:
-        json.dump(openai_usage,f,ensure_ascii=False,indent=4)
+            if 'gpt' in modelname:
+                openai_usage = {
+                    'step': k,
+                    'Run Information': f"{srconst.model_name}: {invoke_time}s",
+                    "Total Tokens": cb.total_tokens,
+                    "Prompt Tokens": cb.prompt_tokens,
+                    "Completion Tokens": cb.completion_tokens,
+                    "Total Cost (USD)": f"${cb.total_cost:.4f}"
+                }
+                with open(os.path.join(LOG_DIR,'openai_usage.log'),'a') as f:
+                    f.write(json.dumps(openai_usage, indent=4 ,ensure_ascii=False) + "\n")

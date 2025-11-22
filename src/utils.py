@@ -3,6 +3,9 @@ import pandas as pd
 from datetime import datetime,timedelta
 import re
 
+import logging
+logger = logging.getLogger(__name__)   # <--- IMPORTANT
+
 from .const import *
 
 def preprocess_text(text):

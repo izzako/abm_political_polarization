@@ -9,6 +9,8 @@ from pydantic import BaseModel, Field
 from langchain_core.prompts.prompt import PromptTemplate
 from langchain_openai import ChatOpenAI
 
+import logging
+logger = logging.getLogger(__name__)   # <--- IMPORTANT
 
 class MemorySummarySchema(BaseModel):
     summary: str = Field(description="Brief explanation")
@@ -43,7 +45,8 @@ class Agent:
             "name": self.name,
             "traits": self.traits,
             "opinion_weight": self.opinion_weight,
-            "memory": self.memory
+            "memory": self.memory,
+            "summarized_memory": self.summarized_memory
         }
     
     def save_json(self, filepath):
@@ -63,6 +66,7 @@ class Agent:
         agent = cls(persona)
         agent.opinion_weight = data.get("opinion_weight", 0)
         agent.memory = data.get("memory", [])
+        agent.summarized_memory = data.get("summarized_memory", {"recency":0,"memory":None})
         return agent
 
     def initialize(self, first_activity: dict):
@@ -106,9 +110,15 @@ class Agent:
             # summarize memory
             structured_llm = llm.with_structured_output(MemorySummarySchema)
             prompt = summarize_template.format(memories=self.memory[(-1*summarize_past):])
-            results = structured_llm.invoke(prompt)
-            self.summarized_memory['memory'] = results.summary # type: ignore
-            self.summarized_memory['recency'] = len(self.memory)
+            try:
+                results = structured_llm.invoke(prompt)
+                self.summarized_memory['memory'] = results.summary # type: ignore
+                self.summarized_memory['recency'] = len(self.memory)
+            except Exception as e:
+                logger.error(f"Error summarizing memory: {e}")
+                self.summarized_memory['memory'] = None
+                self.summarized_memory['recency'] = len(self.memory)
+            logger.info(f"Summarized memory for agent {self.name}: {self.summarized_memory['memory']}")
 
     def update_opinion_weight(self, delta_value: float):
         '''

@@ -7,7 +7,8 @@ from pathlib import Path
 from datetime import datetime
 import os
 
-
+import logging
+logger = logging.getLogger(__name__)   # <--- IMPORTANT
 
 if not os.environ.get("OPENAI_API_KEY"):
   os.environ["OPENAI_API_KEY"] = getpass.getpass("Enter API key for OpenAI: ")

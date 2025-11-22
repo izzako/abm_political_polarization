@@ -8,6 +8,9 @@ from .const import *
 from itertools import islice
 from tqdm import tqdm
 
+import logging
+logger = logging.getLogger(__name__)   # <--- IMPORTANT
+
 oc_template =  PromptTemplate(
         template= load_prompt(prompt_path+'/opinion_classifier.md'),
         input_variables=[
@@ -82,7 +85,7 @@ class OpinionClassifier:
                 batch_reasoning_all.extend([r.reasoning for r in results]) # type: ignore
                 batch_delta_all.extend([r.delta_opinion for r in results]) # type: ignore
             except Exception as e:
-                # print(f"[Batch] Error: {e}")
+                logger.error(f"Batch Error: {e}")
                 batch_reasoning_all.extend([None] * len(agent_batch))
                 batch_delta_all.extend([0] * len(agent_batch))
 
