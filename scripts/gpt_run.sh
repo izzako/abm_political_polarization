@@ -12,7 +12,7 @@
 #$ -m ea
 
 # Give job a name
-#$ -N abm_pp_qwen3
+#$ -N abm_pp_gpt5_nano
 
 # Combine output and error files into a single file
 #$ -j y
@@ -20,11 +20,6 @@
 # Request 4 core
 #$ -pe omp 4
 
-# Request 1 GPU 
-#$ -l gpus=2
-
-# Specify the minimum GPU compute capability. 
-#$ -l gpu_c=8.0
 
 # Keep track of information related to the current job
 echo "=========================================================="
@@ -43,19 +38,4 @@ source .env
 set +a
 
 source /projectnb/llamagrp/izzan/env/bin/activate
-nohup vllm serve Qwen/Qwen3-8B \
-    --reasoning-parser deepseek_r1 \
-    --tensor-parallel-size 2 \
-    > logs/vllm_qwen.log 2>&1 &
-
-echo "Starting vLLM... waiting for server to become ready."
-
-# Wait loop
-until curl -s http://localhost:8000/v1/models | grep -q "id"; do
-    echo "Waiting for model to load... Retrying in 30s"
-    sleep 30
-done
-
-echo "vLLM is ready!"
-
-python -m simulation.simulation_run -c configs/qwen_config.ini
+python -m simulation.simulation_real_data

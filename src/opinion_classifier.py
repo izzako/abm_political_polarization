@@ -11,17 +11,6 @@ from tqdm import tqdm
 import logging
 logger = logging.getLogger(__name__)   # <--- IMPORTANT
 
-oc_template =  PromptTemplate(
-        template= load_prompt(prompt_path+'/opinion_classifier.md'),
-        input_variables=[
-            'gender',
-            'followers_count',
-            'following_count',
-            'current_opinion_weight',
-            'memories',
-            'activity_content'
-        ],
-    )
 
 # Define structured output schema for multiple tweets at once
 class OpinionClassifierSchema(BaseModel):
@@ -32,10 +21,22 @@ class OpinionClassifier:
     def __init__(self, llm : ChatOpenAI):
         self.llm = llm
         self.structured_llm = self.llm.with_structured_output(OpinionClassifierSchema)
-                                                              
+        prompt_path = get('prompt_path',"PROMPT_PATH")
+
+        self.template =  PromptTemplate(
+            template= load_prompt(prompt_path+'/opinion_classifier.md'),
+            input_variables=[
+                'gender',
+                'followers_count',
+                'following_count',
+                'current_opinion_weight',
+                'memories',
+                'activity_content'
+            ],
+        )                                                
 
     def classify(self, agent: Agent , new_activity: dict):
-        prompt = oc_template.format(
+        prompt = self.template.format(
                                     gender = agent.traits['gender'],
                                     followers_count = agent.traits['followers_count'],
                                     following_count = agent.traits['following_count'],
@@ -69,7 +70,7 @@ class OpinionClassifier:
                     desc="Running batch classification")
             ):
             inputs = [
-                oc_template.format(
+                self.template.format(
                     gender=agent.traits["gender"],
                     followers_count=agent.traits["followers_count"],
                     following_count=agent.traits["following_count"],

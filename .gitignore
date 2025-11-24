@@ -211,5 +211,6 @@ __marimo__/
 .DS_Store
 persona/user_*
 outputs/
+outputs_*/
 logs/
 *.o1*

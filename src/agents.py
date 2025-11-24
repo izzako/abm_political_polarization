@@ -15,13 +15,14 @@ logger = logging.getLogger(__name__)   # <--- IMPORTANT
 class MemorySummarySchema(BaseModel):
     summary: str = Field(description="Brief explanation")
 
-
-summarize_template =  PromptTemplate(
-        template= load_prompt(prompt_path+'/memory_summarization.md'),
-        input_variables=[
-            'memories'
-        ],
-    )
+def build_summarize_template():
+    prompt_path = get('prompt_path',"PROMPT_PATH")
+    return PromptTemplate(
+            template= load_prompt(prompt_path+'/memory_summarization.md'),
+            input_variables=[
+                'memories'
+            ],
+        )
 
 class Agent:
     def __init__(self, persona: dict):
@@ -76,7 +77,7 @@ class Agent:
         # first_activity = get_first_activity(self.name)
 
         ## Initialize opinion
-        self.opinion_weight = INIT_OPINION_NORMALIZATION*first_activity['source_weight']
+        self.opinion_weight = float(get('INIT_OPINION_NORMALIZATION','AGENTS'))*first_activity['source_weight']
 
         ## Initialize memory
         if first_activity['activity_type'] == 'reply':
@@ -109,6 +110,7 @@ class Agent:
         if (len(self.memory) >= summarize_past) and (len(self.memory) % summarize_past==0):
             # summarize memory
             structured_llm = llm.with_structured_output(MemorySummarySchema)
+            summarize_template = build_summarize_template()
             prompt = summarize_template.format(memories=self.memory[(-1*summarize_past):])
             try:
                 results = structured_llm.invoke(prompt)
@@ -124,4 +126,4 @@ class Agent:
         '''
         Update opinion weight
         '''
-        self.opinion_weight = round(np.tanh(self.opinion_weight+(learning_rate*delta_value)),2)
+        self.opinion_weight = round(np.tanh(self.opinion_weight+(float(get('learning_rate','AGENTS'))*delta_value)),2)

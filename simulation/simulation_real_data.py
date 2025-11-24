@@ -27,10 +27,9 @@ from src.opinion_classifier import OpinionClassifier
 import src.utils as srcutils
 import src.const as srconst
 
-LOG_DIR = './logs'
-OUTPUT_DIR = './outputs'
-os.makedirs(LOG_DIR,exist_ok=True)
-os.makedirs(OUTPUT_DIR,exist_ok=True)
+
+os.makedirs(srconst.LOG_DIR,exist_ok=True)
+os.makedirs(srconst.OUTPUT_DIR,exist_ok=True)
 
 # INITIATE LLM AND OPINION CLASSIFIER
 
@@ -72,7 +71,7 @@ logging.basicConfig(level=logging.INFO,
                     format="[{asctime}] {levelname} {name} : {message}",
                     style="{",
                     datefmt="%Y-%m-%d %H:%M:%S",
-                    filename=os.path.join(LOG_DIR,f"simulation_{modelname}.log"),
+                    filename=os.path.join(srconst.LOG_DIR,f"simulation_{modelname}.log"),
                     encoding="utf-8",
                     filemode="w")
 
@@ -120,7 +119,7 @@ sim_interaction_data = sim_interaction_data[sim_interaction_data['source_author'
 
 # INITIATE TRACKER
 
-logger.info(f"Initate tracker data, outputs on: {OUTPUT_DIR}")
+logger.info(f"Initate tracker data, outputs on: {srconst.OUTPUT_DIR}")
 
 opinion_shift_dict = {
     'time_step':[],
@@ -140,7 +139,7 @@ opinion_shift_df = pd.DataFrame(opinion_shift_dict)
 
 
 start = srconst.data_start_datetime
-end = srconst.data_end_datetime #datetime(2024,2,3,0,0)
+end = srconst.data_end_datetime
 step = timedelta(minutes=srconst.minutes_step)
 
 total = int((end - start) / step) + 1
@@ -152,8 +151,6 @@ logger.info(f"Total simulation steps: {total}")
 
 
 k = 0
-# num_of_text_data_iter = []
-# num_of_interaction_data_iter = []
 timestep = []
 track_every = srconst.track_every # step (1 step = 15 minutes)
 
@@ -162,13 +159,11 @@ logger.info(f"Progress will be tracked every {track_every} steps")
 with ctx as cb: 
     for time_step in tqdm(srcutils.datetime_range(start,end),total=total,desc='Simulation'):
         k +=1
-        if k>80: break
+        # if k>80: break
         step_text_data = sim_text_data[(sim_text_data['datetime']==time_step)& (sim_text_data['interaction_type']=='original')]
         step_interaction_data = sim_interaction_data[sim_interaction_data['datetime']==time_step]
         
         timestep.append(time_step)
-        # num_of_text_data_iter.append(len(step_text_data))
-        # num_of_interaction_data_iter.append(len(step_interaction_data))
         
         batch_agents = []
         batch_new_activity = []
@@ -214,6 +209,7 @@ with ctx as cb:
             )
             invoke_end = time.time()
             invoke_time = round(invoke_end - invoke_start)
+            
             # save
             weight_updates = {}
             for agent, new_activity,reasoning, delta_opinion in zip(batch_agents,batch_new_activity,batch_reasoning,batch_delta):
@@ -234,7 +230,7 @@ with ctx as cb:
         # save periodically
         if k % track_every == 0:
             logger.info(f"{k}/{total} steps, Invoke time: {invoke_time}s,current weight updated: {weight_updates}")
-            opinion_shift_df.to_csv(os.path.join(OUTPUT_DIR,f'opinion_shift_step_{k}_{total}.csv'),
+            opinion_shift_df.to_csv(os.path.join(srconst.OUTPUT_DIR,f'opinion_shift_step_{k}_{total}.csv'),
                                         index=False,
                                         sep=';')
             
@@ -248,5 +244,5 @@ with ctx as cb:
                     "Completion Tokens": cb.completion_tokens,
                     "Total Cost (USD)": f"${cb.total_cost:.4f}"
                 }
-                with open(os.path.join(LOG_DIR,'openai_usage.log'),'a') as f:
+                with open(os.path.join(srconst.LOG_DIR,'openai_usage.log'),'a') as f:
                     f.write(json.dumps(openai_usage, indent=4 ,ensure_ascii=False) + "\n")
