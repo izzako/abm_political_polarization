@@ -56,11 +56,6 @@ def main():
     temperature = float(srconst.get('temperature','MODEL'))
     inference_server_url = srconst.get('inference_server_url','MODEL')
 
-    
-
-    os.makedirs(srconst.LOG_DIR,exist_ok=True)
-    os.makedirs(srconst.OUTPUT_DIR,exist_ok=True)
-
     # INITIATE LLM AND OPINION CLASSIFIER
 
     if 'gpt' in model_name.lower():
@@ -96,6 +91,8 @@ def main():
         modelname = model_name.lower().replace('/','_')
 
     oc = OpinionClassifier(llm)
+    os.makedirs(srconst.LOG_DIR,exist_ok=True)
+    os.makedirs(os.path.join(srconst.OUTPUT_DIR,modelname),exist_ok=True)
 
     logging.basicConfig(level=logging.INFO,
                         format="[{asctime}] {levelname} {name} : {message}",
@@ -149,7 +146,7 @@ def main():
 
     # INITIATE TRACKER
 
-    logger.info(f"Initate tracker data, outputs on: {srconst.OUTPUT_DIR}")
+    logger.info(f"Initate tracker data, outputs on: {os.path.join(srconst.OUTPUT_DIR,modelname)}")
 
     opinion_shift_dict = {
         'time_step':[],
@@ -259,8 +256,8 @@ def main():
             
             # save periodically
             if k % track_every == 0:
-                logger.info(f"{k}/{total} steps, Invoke time: {invoke_time}s,current weight updated: {weight_updates}")
-                opinion_shift_df.to_csv(os.path.join(srconst.OUTPUT_DIR,f'opinion_shift_step_{k}_{total}.csv'),
+                logger.info(f"{k}/{total} steps, Invoke time: {invoke_time}s, current weight updated: {weight_updates}")
+                opinion_shift_df.to_csv(os.path.join(srconst.OUTPUT_DIR,modelname,f'opinion_shift_step_{k}_{total}.csv'),
                                             index=False,
                                             sep=';')
                 
