@@ -35,5 +35,11 @@ minutes_step = 15 # depends on data datetime granularity
 topics = ['pemilu / curang / presiden', 'prabowo / jokowi / dukung',
        'ganjar / mahfud / putar', 'anies / amin / ubah',
        'count / quick / quick_count']
+
+# DEFAULT PATHS
 LOG_DIR = './logs'
 OUTPUT_DIR = './outputs'
+PERSONA_DIR = './persona'
+
+# MOVING
+today_str = datetime.today().strftime("%Y%m%d")

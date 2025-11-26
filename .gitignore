@@ -209,7 +209,7 @@ __marimo__/
 # custom
 *.ipynb
 .DS_Store
-persona/user_*
+persona/
 outputs/
 outputs_*/
 logs/

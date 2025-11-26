@@ -32,6 +32,7 @@ import src.const as srconst
 
 def main():
 
+    # SET PARSER
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", "--config", required=True)
     parser.add_argument(
@@ -41,6 +42,7 @@ def main():
 )
     args = parser.parse_args()
 
+    # LOAD CONFIG FROM PARSER
     srconst.load_config(args.config)
 
     text_data = srconst.get('text_data','DATA_PATH')
@@ -55,6 +57,7 @@ def main():
     model_name = srconst.get('model_name','MODEL')
     temperature = float(srconst.get('temperature','MODEL'))
     inference_server_url = srconst.get('inference_server_url','MODEL')
+    
 
     # INITIATE LLM AND OPINION CLASSIFIER
 
@@ -91,19 +94,28 @@ def main():
         modelname = model_name.lower().replace('/','_')
 
     oc = OpinionClassifier(llm)
-    os.makedirs(srconst.LOG_DIR,exist_ok=True)
-    os.makedirs(os.path.join(srconst.OUTPUT_DIR,modelname),exist_ok=True)
+
+    EXPERIMENT_OUTPUT_DIR = os.path.join(srconst.OUTPUT_DIR,modelname)
+    EXPERIMENT_LOG_DIR = os.path.join(srconst.LOG_DIR,modelname)
+    EXPERIMENT_PERSONA_DIR = os.path.join(srconst.PERSONA_DIR,modelname)
+
+    os.makedirs(EXPERIMENT_LOG_DIR,exist_ok=True)
+    os.makedirs(EXPERIMENT_OUTPUT_DIR,exist_ok=True)
+    os.makedirs(EXPERIMENT_PERSONA_DIR,exist_ok=True)
 
     logging.basicConfig(level=logging.INFO,
                         format="[{asctime}] {levelname} {name} : {message}",
                         style="{",
                         datefmt="%Y-%m-%d %H:%M:%S",
-                        filename=os.path.join(srconst.LOG_DIR,f"simulation_{modelname}.log"),
+                        filename=os.path.join(EXPERIMENT_LOG_DIR,f"simulation_{modelname}_{srconst.today_str}.log"),
                         encoding="utf-8",
                         filemode="w")
 
     logger = logging.getLogger(__name__)
-    logger.info(f"Set opinion classifier model: {model_name.lower()}")
+    logger.info(f"Set opinion classifier model: {model_name}")
+    logger.info(f"Set output dir: {EXPERIMENT_OUTPUT_DIR}")
+    logger.info(f"Set logging dir: {EXPERIMENT_LOG_DIR}")
+    logger.info(f"Set persona dir: {EXPERIMENT_PERSONA_DIR}")
 
     # LOAD DATA
     logger.info("Loading data...")
@@ -134,7 +146,7 @@ def main():
         if first_activity:
             test_agent = Agent(author_data[author_data['author'] == user].iloc[0].to_dict())
             test_agent.initialize(first_activity)
-            test_agent.save_json(f'./persona/{test_agent.name}.json')
+            test_agent.save_json(f'{EXPERIMENT_PERSONA_DIR}/{test_agent.name}.json')
         else:
             print(user)
 
@@ -156,7 +168,7 @@ def main():
 
     for user in tqdm(author_data['author'],desc='Adding agents weight to tracker'):
         opinion_shift_dict['time_step'].append(data_start_datetime)
-        agent = Agent.from_json(f"persona/{user}.json")
+        agent = Agent.from_json(f"{EXPERIMENT_PERSONA_DIR}/{user}.json")
         opinion_shift_dict['agent'].append(agent.name)
         opinion_shift_dict['opinion_weight'].append(agent.opinion_weight)
 
@@ -198,7 +210,7 @@ def main():
             # load agent and create activity
             if len(step_text_data)>0:
                 for i,row in enumerate(step_text_data.itertuples()): #original posts
-                    agent = Agent.from_json(f"persona/{row.author}.json")
+                    agent = Agent.from_json(f"{EXPERIMENT_PERSONA_DIR}/{row.author}.json")
                     new_activity = {'datetime':row.datetime.strftime('%Y-%m-%d %H:%M:%S'),
                                 'memory': srcutils.create_original_memory(row.text,
                                                         row.likes_count,
@@ -210,7 +222,7 @@ def main():
                     
             if len(step_interaction_data)>0:
                 for i,row in enumerate(step_interaction_data.itertuples()):
-                    agent = Agent.from_json(f"persona/{row.source_author}.json")
+                    agent = Agent.from_json(f"{EXPERIMENT_PERSONA_DIR}/{row.source_author}.json")
                     if row.interaction_type =='reply': #replies
                         new_activity = {'datetime':row.datetime.strftime('%Y-%m-%d %H:%M:%S'),
                                     'memory': srcutils. create_reply_memory_without_weight(
@@ -246,7 +258,7 @@ def main():
                         logger.error(f"Error on agent {agent.name} at {time_step}")
                     agent.update_memory(llm,new_activity)
                     agent.update_opinion_weight(delta_opinion)
-                    agent.save_json(f'persona/{agent.name}.json')
+                    agent.save_json(f'{EXPERIMENT_PERSONA_DIR}/{agent.name}.json')
                     weight_updates[agent.name]=agent.opinion_weight
                 opinion_shift_df = srcutils.track_updated_opinions(opinion_shift_df,weight_updates,time_step)
                 
@@ -271,7 +283,7 @@ def main():
                         "Completion Tokens": cb.completion_tokens,
                         "Total Cost (USD)": f"${cb.total_cost:.4f}"
                     }
-                    with open(os.path.join(srconst.LOG_DIR,'openai_usage.log'),'a') as f:
+                    with open(os.path.join(EXPERIMENT_LOG_DIR,'openai_usage.log'),'a') as f:
                         f.write(json.dumps(openai_usage, indent=4 ,ensure_ascii=False) + "\n")
 
 if __name__ == "__main__":
