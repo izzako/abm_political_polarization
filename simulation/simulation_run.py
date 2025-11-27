@@ -70,7 +70,8 @@ def main():
                     frequency_penalty = 0.0,
                     presence_penalty=0.0
                 )
-        llm = llm.bind(max_tokens=32768)
+        llm = llm.bind(max_tokens=16384)
+        summarizer_llm = llm
         ctx = get_openai_callback()
         modelname = model_name.lower()
 
@@ -83,13 +84,32 @@ def main():
             openai_api_base=inference_server_url, # type: ignore
             max_retries=3,
             timeout=60,
-            model_kwargs={
-                "frequency_penalty": 0.0,
-                "presence_penalty": 0.0,
-            },
+            top_p = 0.8,
             temperature= temperature,
+            extra_body={
+                "top_k": 20
+            },
         )
-        llm = llm.bind(max_tokens=32768)
+
+        summarizer_llm = llm
+        ctx=nullcontext()
+        modelname = model_name.lower().replace('/','_')
+
+    else:
+        llm = ChatOpenAI(
+            model=model_name,
+            openai_api_key="EMPTY",  # type: ignore
+            openai_api_base=inference_server_url, # type: ignore
+            max_retries=3,
+            timeout=60,
+            top_p = 0.8,
+            temperature= temperature,
+            extra_body={
+                "top_k": 20
+            },
+        )
+
+        summarizer_llm = llm
         ctx=nullcontext()
         modelname = model_name.lower().replace('/','_')
 
@@ -195,7 +215,7 @@ def main():
 
     logger.info(f"Progress will be tracked every {track_every} steps")
 
-    with ctx as cb: 
+    with ctx as cb:  # pyright: ignore[reportGeneralTypeIssues]
         for time_step in tqdm(srcutils.datetime_range(start,end),total=total,desc='Simulation'):
             k +=1
             if k>10 and args.debug : break
@@ -256,7 +276,7 @@ def main():
                         new_activity['memory'] += '\n'+reasoning
                     else:
                         logger.error(f"Error on agent {agent.name} at {time_step}")
-                    agent.update_memory(llm,new_activity)
+                    agent.update_memory(summarizer_llm,new_activity)
                     agent.update_opinion_weight(delta_opinion)
                     agent.save_json(f'{EXPERIMENT_PERSONA_DIR}/{agent.name}.json')
                     weight_updates[agent.name]=agent.opinion_weight
