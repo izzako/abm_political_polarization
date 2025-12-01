@@ -36,10 +36,16 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", "--config", required=True)
     parser.add_argument(
-    "--debug",
-    action="store_true",
-    help="Enable debug mode"
-)
+        "--debug",
+        action="store_true",
+        help="Enable debug mode"
+    )
+    parser.add_argument(
+        "--simulate",
+        action="store_true",
+        help="Enable debug mode"
+    )
+
     args = parser.parse_args()
 
     # LOAD CONFIG FROM PARSER
@@ -123,7 +129,7 @@ def main():
     os.makedirs(EXPERIMENT_OUTPUT_DIR,exist_ok=True)
     os.makedirs(EXPERIMENT_PERSONA_DIR,exist_ok=True)
 
-    logging.basicConfig(level=logging.INFO,
+    logging.basicConfig(level=logging.INFO if not args.debug else logging.DEBUG,
                         format="[{asctime}] {levelname} {name} : {message}",
                         style="{",
                         datefmt="%Y-%m-%d %H:%M:%S",
@@ -216,7 +222,7 @@ def main():
     logger.info(f"Progress will be tracked every {track_every} steps")
 
     with ctx as cb:  # pyright: ignore[reportGeneralTypeIssues]
-        for time_step in tqdm(srcutils.datetime_range(start,end),total=total,desc='Simulation'):
+        for time_step in tqdm(srcutils.datetime_range(start,end,srconst.minutes_step),total=total,desc='Simulation'):
             k +=1
             if k>10 and args.debug : break
             step_text_data = sim_text_data[(sim_text_data['datetime']==time_step)& (sim_text_data['interaction_type']=='original')]
@@ -305,6 +311,11 @@ def main():
                     }
                     with open(os.path.join(EXPERIMENT_LOG_DIR,'openai_usage.log'),'a') as f:
                         f.write(json.dumps(openai_usage, indent=4 ,ensure_ascii=False) + "\n")
+            
+            logger.info(f"{k}/{total} steps, Invoke time: {invoke_time}s, current weight updated: {weight_updates}")
+            opinion_shift_df.to_csv(os.path.join(srconst.OUTPUT_DIR,modelname,f'opinion_shift_step_{k}_{total}.csv'),
+                                        index=False,
+                                        sep=';')
 
 if __name__ == "__main__":
     main()

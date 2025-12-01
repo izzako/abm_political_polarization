@@ -120,7 +120,7 @@ class Agent:
                 logger.error(f"Error summarizing memory: {e}")
                 self.summarized_memory['memory'] = None
                 self.summarized_memory['recency'] = len(self.memory)
-            logger.info(f"Summarized memory for agent {self.name}: {self.summarized_memory['memory']}")
+            logger.debug(f"Summarized memory for agent {self.name}: {self.summarized_memory['memory']}")
 
     def update_opinion_weight(self, delta_value: float):
         '''
