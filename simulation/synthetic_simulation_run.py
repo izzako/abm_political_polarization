@@ -383,11 +383,11 @@ def main():
                     }
                     with open(os.path.join(EXPERIMENT_LOG_DIR,'openai_usage.log'),'a') as f:
                         f.write(json.dumps(openai_usage, indent=4 ,ensure_ascii=False) + "\n")
-            
-            logger.info(f"{k}/{total} steps, Invoke time: {invoke_time}s, current weight updated: {weight_updates}")
-            opinion_shift_df.to_csv(os.path.join(srconst.OUTPUT_DIR,modelname,f'opinion_shift_step_{k}_{total}.csv'),
-                                        index=False,
-                                        sep=';')
+        #save at the end of iteration      
+        logger.info(f"{k}/{total} steps, Invoke time: {invoke_time}s, current weight updated: {weight_updates}")
+        opinion_shift_df.to_csv(os.path.join(srconst.OUTPUT_DIR,modelname,f'opinion_shift_step_{k}_{total}.csv'),
+                                    index=False,
+                                    sep=';')
 
 if __name__ == "__main__":
     main()
