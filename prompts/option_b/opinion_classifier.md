@@ -1,8 +1,9 @@
+With the topic of {topic}.
 Given my details as a Twitter user:
 
 - My gender is {gender}.
 - I have {followers_count} followers and {following_count} accounts I follow.
-- My current OPINION WEIGHT about the topic, before this activity, is {current_opinion_weight} (from -1 to 1).
+- My current OPINION WEIGHT about the topic, before this activity, is {current_opinion_weight} (from -1 negative to 1 positive).
 
 My past memories consist of the following events (each with a date and summary): {memories}.
 

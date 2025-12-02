@@ -74,8 +74,6 @@ class Agent:
         '''
         Initialize agents initial opinion and memory
         '''
-        # first_activity = get_first_activity(self.name)
-
         ## Initialize opinion
         self.opinion_weight = float(get('INIT_OPINION_NORMALIZATION','AGENTS'))*first_activity['source_weight']
 
@@ -98,6 +96,51 @@ class Agent:
                 'memory':initial_memory
             }
         )
+
+    def prep_init_synthetic(self, list_activity: list[dict]):
+        '''
+        Initialize agents initial opinion and personality
+        '''
+        initialized_memory = []
+        initialized_weight = []
+        ## Initialize opinion
+        for activity in list_activity:
+            ## Initialize memory
+            initialized_weight.append(activity['source_weight'])
+            if activity['activity_type'] == 'reply':
+                memory = create_reply_memory(activity["source_text"],
+                                                    activity['target_text'],
+                                                    activity['target_weight'])
+
+            elif activity['activity_type'] == 'retweet':
+                memory = create_retweet_memory(activity['target_text'])
+            
+            elif activity['activity_type'] == 'original':
+                memory = create_original_memory(activity['source_text'],
+                                                        activity['likes_count'],
+                                                        activity['reposts_count'])
+            initialized_memory.append(
+                {
+                    'datetime':datetime.strftime(activity['activity_datetime'], '%Y-%m-%d %H:%M:%S'),
+                    'memory':memory
+                }
+            )
+        # summarize memory
+        
+        summarize_template = build_summarize_template()
+        prompt = summarize_template.format(memories=initialized_memory)
+        if len(initialized_memory)>0:
+            self.opinion_weight = float(get('INIT_OPINION_NORMALIZATION','AGENTS'))*sum(initialized_weight)/len(initialized_weight)
+            self.summarized_memory['recency'] = len(initialized_memory)
+        else:
+            logger.debug(f"No memory to summarize for agent {self.name}")
+            self.summarized_memory['recency'] = 0
+            self.opinion_weight = 0
+        
+        return prompt
+
+    def initialize_synthetic(self, summary : str):
+        self.summarized_memory['memory'] = summary 
     
     def update_memory(self, llm : ChatOpenAI ,new_activity: dict, summarize_past = 5):
         '''

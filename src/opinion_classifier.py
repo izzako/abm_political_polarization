@@ -1,5 +1,5 @@
 # Opinion Classifier
-from langchain_openai import ChatOpenAI
+from typing import Union
 from .agents import Agent
 from pydantic import BaseModel, Field
 from langchain_core.prompts.prompt import PromptTemplate
@@ -18,14 +18,16 @@ class OpinionClassifierSchema(BaseModel):
     delta_opinion: float = Field(description="Ranging from -1 (strong negative shift) to 0 (no change) to 1 (strong positive shift)")
 
 class OpinionClassifier:
-    def __init__(self, llm : ChatOpenAI):
+    def __init__(self, llm, topic):
         self.llm = llm
-        self.structured_llm = self.llm.with_structured_output(OpinionClassifierSchema)
+        self.structured_llm = self.llm.with_structured_output(OpinionClassifierSchema) # type: ignore
+        self.topic = topic
         prompt_path = get('prompt_path',"PROMPT_PATH")
 
         self.template =  PromptTemplate(
             template= load_prompt(prompt_path+'/opinion_classifier.md'),
             input_variables=[
+                'topic',
                 'gender',
                 'followers_count',
                 'following_count',
@@ -37,6 +39,7 @@ class OpinionClassifier:
 
     def classify(self, agent: Agent , new_activity: dict):
         prompt = self.template.format(
+                                    topic = self.topic,
                                     gender = agent.traits['gender'],
                                     followers_count = agent.traits['followers_count'],
                                     following_count = agent.traits['following_count'],
@@ -49,9 +52,7 @@ class OpinionClassifier:
         results = self.structured_llm.invoke(prompt)
         return results.reasoning, results.delta_opinion # type: ignore
     
-    def batch_classify(self, list_of_agent: list[Agent], list_of_new_activity: list[dict], batch_size: int = 10):
-        
-
+    def batch_classify(self, list_of_agent: list[Agent], list_of_new_activity: list[dict], batch_size: int = 5):
         def chunks(iterable, size):
             it = iter(iterable)
             while True:
@@ -71,6 +72,7 @@ class OpinionClassifier:
             ):
             inputs = [
                 self.template.format(
+                    topic = self.topic,
                     gender=agent.traits["gender"],
                     followers_count=agent.traits["followers_count"],
                     following_count=agent.traits["following_count"],

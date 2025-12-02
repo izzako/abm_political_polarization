@@ -29,7 +29,8 @@ echo "WORKING DIR: $TMPDIR"
 echo "Job ID : $JOB_ID"
 echo "=========================================================="
 
-
+CONFIG="configs/gpt_config.ini"
+SIMULATE="false" # "false" or "true"
 
 module load cuda/12.2 gcc/12.2.0 python3/3.10.12
 
@@ -38,4 +39,10 @@ source .env
 set +a
 
 source /projectnb/llamagrp/izzan/env/bin/activate
-python -m simulation.simulation_real_data
+if [[ "$SIMULATE" == "true" ]]; then
+    echo "Running synthetic simulation..."
+    python -m simulation.synthetic_simulation_run -c "$CONFIG"
+else
+    echo "Running simulation based on real data..."
+    python -m simulation.simulation_run -c "$CONFIG"
+fi

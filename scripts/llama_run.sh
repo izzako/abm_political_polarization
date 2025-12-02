@@ -35,6 +35,9 @@ echo "Job ID : $JOB_ID"
 echo "=========================================================="
 
 MODEL="nvidia/Llama-3.1-Nemotron-Nano-8B-v1"
+CONFIG="configs/llama_config.ini"
+SIMULATE="false" # "false" or "true"
+
 MODEL_SAFE=$(echo "$MODEL" | tr '[:upper:]/' '[:lower:]_' )
 LOG_DIR="logs/${MODEL_SAFE}"
 
@@ -50,7 +53,7 @@ mkdir -p "$LOG_DIR"
 nohup vllm serve "$MODEL" \
     --tensor-parallel-size 1 \
     --max-model-len 16384 \
-    > "$LOG_DIR/vllm.log" 2>&1 &
+    > "$LOG_DIR/vllm_$JOB_ID.log" 2>&1 &
 
 echo "Starting vLLM for $MODEL (logs in $LOG_DIR)..."
 
@@ -62,4 +65,10 @@ done
 
 echo "vLLM is ready!"
 
-python -m simulation.simulation_run -c configs/llama_config.ini
+if [[ "$SIMULATE" == "true" ]]; then
+    echo "Running synthetic simulation..."
+    python -m simulation.synthetic_simulation_run -c "$CONFIG"
+else
+    echo "Running simulation based on real data..."
+    python -m simulation.simulation_run -c "$CONFIG"
+fi

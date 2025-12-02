@@ -40,7 +40,7 @@ def _get_first_activity(text_data,interaction_data,author_id):
     if first_interaction is None and first_text is None:
         return None  # or customize your 'no activity' output
 
-    if first_interaction is None and first_text is not None:
+    if first_interaction is None and first_text is not None: #original
         activity_type = first_text['interaction_type']
         return {
             'activity_type': activity_type,
@@ -107,6 +107,86 @@ def _get_first_activity(text_data,interaction_data,author_id):
             'reposts_count': first_text['reposts_count'],
         }
     
+def _get_all_activity(text_data, interaction_data, author_id):
+    '''Returns all activities for an author as a list of dictionaries, sorted by datetime'''
+    
+    interactions = interaction_data[interaction_data['source_author'] == author_id]
+    texts = text_data[text_data['author'] == author_id]
+    
+    # No activity found
+    if interactions.empty and texts.empty:
+        return []
+    
+    activities = []
+    
+    # Process all interactions (retweets/replies)
+    for _, interaction in interactions.iterrows():
+        activity_type = interaction['interaction_type']
+        
+        result = {
+            'activity_type': activity_type,
+            'target_author': None,
+            'activity_datetime': interaction['datetime'],
+            'target_text': None,
+            'target_weight': None,
+            'source_text': None,
+            'source_weight': None,
+            'likes_count': None,
+            'reposts_count': None,
+        }
+        
+        if activity_type == 'retweet':
+            target = text_data.loc[interaction['target_tweet_id']]
+            result.update({
+                'target_author': interaction['target_author'],
+                'target_text': target['text'],
+                'target_weight': sentiment_map[target['sentiment_label']],
+                'source_weight': sentiment_map[target['sentiment_label']],
+            })
+        elif activity_type == 'reply':
+            target_id = interaction['target_tweet_id']
+            # Find the corresponding text for this reply
+            reply_text = texts[texts['datetime'] == interaction['datetime']]
+            if not reply_text.empty:
+                reply_text = reply_text.iloc[0]
+                result.update({
+                    'target_author': interaction['target_author'],
+                    'target_text': text_data.loc[target_id, 'text'],
+                    'target_weight': sentiment_map[text_data.loc[target_id, 'sentiment_label']],
+                    'source_text': reply_text['text'],
+                    'source_weight': sentiment_map[reply_text['sentiment_label']],
+                    'likes_count': reply_text['likes_count'],
+                    'reposts_count': reply_text['reposts_count'],
+                })
+        
+        activities.append(result)
+    
+    # Process all original texts (those not already processed as replies)
+    interaction_datetimes = set(interactions['datetime']) if not interactions.empty else set()
+    for _, text in texts.iterrows():
+        # Skip if this text was already processed as a reply
+        if text['datetime'] in interaction_datetimes:
+            continue
+        
+        activity_type = text['interaction_type']
+        result = {
+            'activity_type': activity_type,
+            'target_author': None,
+            'activity_datetime': text['datetime'],
+            'target_text': None,
+            'target_weight': None,
+            'source_text': text['text'],
+            'source_weight': sentiment_map[text['sentiment_label']],
+            'likes_count': text['likes_count'],
+            'reposts_count': text['reposts_count'],
+        }
+        activities.append(result)
+    
+    # Sort by datetime
+    activities.sort(key=lambda x: x['activity_datetime'])
+    
+    return activities
+
 def datetime_range(start, end, step_minutes=15):
     current = start
     step = timedelta(minutes=step_minutes)
@@ -133,6 +213,11 @@ def create_original_memory(text, likes_count, reposts_count):
     return f'''I wrote a tweet:
 "{text}"
 It received {public_impressions}.'''
+
+def create_synthetic_original_memory(text):
+    return f'''I wrote a tweet:
+"{text}",
+which represent my stance.'''
 
 def create_reply_memory(source_text, target_text, target_weight):
     return f'''I replied to a post that said:
@@ -174,3 +259,7 @@ def track_updated_opinions(df, updates, timestep):
         next_step.loc[next_step['agent'] == agent, 'opinion_weight'] = new_val
     
     return pd.concat([df, next_step], ignore_index=True)
+
+
+def chunk_list(lst, chunk_size):
+    return [lst[i:i + chunk_size] for i in range(0, len(lst), chunk_size)]

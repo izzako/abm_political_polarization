@@ -25,7 +25,8 @@ from langchain_community.callbacks import get_openai_callback
 from langchain_core.prompts.prompt import PromptTemplate
 from langchain_openai import ChatOpenAI
 
-from src.agents import Agent
+from src.agents import Agent, MemorySummarySchema
+from src.tweet_generator import SyntheticTweetGenerator
 from src.opinion_classifier import OpinionClassifier
 import src.utils as srcutils
 import src.const as srconst
@@ -116,10 +117,11 @@ def main():
         modelname = model_name.lower().replace('/','_')
 
     oc = OpinionClassifier(llm,srconst.topics[topic_num])
+    synthetic_generator = SyntheticTweetGenerator(llm=llm,topic=srconst.topics[topic_num])
 
-    EXPERIMENT_OUTPUT_DIR = os.path.join(srconst.OUTPUT_DIR,modelname,str(topic_num))
+    EXPERIMENT_OUTPUT_DIR = os.path.join(srconst.OUTPUT_DIR,modelname,f'{topic_num}_simulation')
     EXPERIMENT_LOG_DIR = os.path.join(srconst.LOG_DIR,modelname)
-    EXPERIMENT_PERSONA_DIR = os.path.join(srconst.PERSONA_DIR,modelname,str(topic_num))
+    EXPERIMENT_PERSONA_DIR = os.path.join(srconst.PERSONA_DIR,modelname,f'{topic_num}_simulation')
 
     os.makedirs(EXPERIMENT_LOG_DIR,exist_ok=True)
     os.makedirs(EXPERIMENT_OUTPUT_DIR,exist_ok=True)
@@ -129,7 +131,7 @@ def main():
                         format="[{asctime}] {levelname} {name} : {message}",
                         style="{",
                         datefmt="%Y-%m-%d %H:%M:%S",
-                        filename=os.path.join(EXPERIMENT_LOG_DIR,f"{srconst.today_str}_{topic_num}_{modelname}.log"),
+                        filename=os.path.join(EXPERIMENT_LOG_DIR,f"{srconst.today_str}_{topic_num}_simulation_{modelname}.log"),
                         encoding="utf-8",
                         filemode="w")
 
@@ -139,6 +141,15 @@ def main():
     logger.info(f"Set logging dir: {EXPERIMENT_LOG_DIR}")
     logger.info(f"Set persona dir: {EXPERIMENT_PERSONA_DIR}")
 
+    # DATA DATES
+    init_time_personality = int(srconst.get('timeframe_init','SIMULATION')) #days
+    start = data_start_datetime
+    simulation_start = start + pd.Timedelta(days=init_time_personality)
+    end = data_end_datetime
+    step = timedelta(minutes=srconst.minutes_step)
+
+    total = int((end - start) / step) + 1
+    
     # LOAD DATA
     logger.info("Loading data...")
 
@@ -150,7 +161,6 @@ def main():
     text_data.set_index('tweet_id',inplace=True)
 
     # filter text with specific topics
-
     
     logger.info(f"Filter text with specific topics: {srconst.topics[topic_num]}")
 
@@ -160,28 +170,56 @@ def main():
     sim_interaction_data = interaction_data[interaction_data['target_tweet_id'].isin(sim_text_data.index)].copy()
     sim_interaction_data = sim_interaction_data[~((sim_interaction_data['interaction_type']=='reply')&
                     ~(sim_interaction_data['source_tweet_id'].isin(sim_text_data.index)))]
+    sim_text_data.loc[sim_text_data.datetime >= simulation_start,'text'] = '' # erase simulation text to ensure no leakage
+    
+    #initialization for agents personality
+    initialize_sim_text_data = text_data[text_data.datetime < simulation_start]
+    initialize_sim_interaction_data = interaction_data[interaction_data.datetime < simulation_start]
 
 
     # INITATE AGENTS
     logger.info(f"Initate agents data...")
-    for user in tqdm(author_data['author'],desc='Initiating agents'):
-        first_activity = srcutils._get_first_activity(sim_text_data,sim_interaction_data,user)
-        if first_activity:
-            test_agent = Agent(author_data[author_data['author'] == user].iloc[0].to_dict())
-            test_agent.initialize(first_activity)
-            test_agent.save_json(f'{EXPERIMENT_PERSONA_DIR}/{test_agent.name}.json')
-        else:
-            logger.error(f"Failed to initiate agent {user}")
+    summarize_batch = 10
+    initiate_track = 0
+    
+    with ctx as cb:
+        for batch in tqdm(srcutils.chunk_list(author_data['author'].tolist(), summarize_batch), desc=f"Initialize agents with batch {summarize_batch}"):
+            batch_inputs = []
+            agents = []
+            initate_track += len(batch)
+            for user in tqdm(batch,leave=False,desc="prep prompt"):
+                activities = srcutils._get_all_activity(initialize_sim_text_data, initialize_sim_interaction_data, user)
+                agent = Agent(author_data[author_data['author'] == user].iloc[0].to_dict())
+                agents.append(agent)
+                batch_inputs.append(agent.prep_init_synthetic(activities))
+            
+            # Batch call
+            try:
+                responses = summarizer_llm.with_structured_output(MemorySummarySchema).batch(batch_inputs) # type: ignore
+            except Exception as e:
+                print(f"Batch call failed: {e}")
+                responses = [None]*summarize_batch  # or handle appropriately
+            
+            for agent, response in tqdm(zip(agents, responses),desc='load_to_json',leave=False):
+                assert type(response) is MemorySummarySchema
+                agent.initialize_synthetic(response.summary)
+                agent.save_json(f'{EXPERIMENT_PERSONA_DIR}/{agent.name}.json')
 
-    # remove every FIRST interaction of each user
-
-    sim_text_data = sim_text_data[sim_text_data['author'].duplicated(keep='first')]
-    sim_interaction_data = sim_interaction_data[sim_interaction_data['source_author'].duplicated(keep='first')]
+            if 'gpt' in modelname:
+                openai_usage ={
+                    "Compound Num. of Agents":initate_track,
+                    "Total Tokens": cb.total_tokens, # type: ignore
+                    "Prompt Tokens": cb.prompt_tokens, # type: ignore
+                    "Completion Tokens": cb.completion_tokens, # type: ignore
+                    "Total Cost (USD)": f"${cb.total_cost:.4f}" # type: ignore
+                    }
+                with open(os.path.join(EXPERIMENT_LOG_DIR,f'{srcutils.today_str}_{topic_num}_agent_initiate_openai_usage.log'),'a') as f:
+                    f.write(json.dumps(openai_usage, indent=4 ,ensure_ascii=False) + "\n")
 
 
     # INITIATE TRACKER
 
-    logger.info(f"Initate tracker data, outputs on: {EXPERIMENT_OUTPUT_DIR}")
+    logger.info(f"Initate tracker data, outputs on: {os.path.join(srconst.OUTPUT_DIR,modelname)}")
 
     opinion_shift_dict = {
         'time_step':[],
@@ -190,21 +228,13 @@ def main():
     }
 
     for user in tqdm(author_data['author'],desc='Adding agents weight to tracker'):
-        opinion_shift_dict['time_step'].append(data_start_datetime)
+        opinion_shift_dict['time_step'].append(simulation_start)
         agent = Agent.from_json(f"{EXPERIMENT_PERSONA_DIR}/{user}.json")
         opinion_shift_dict['agent'].append(agent.name)
         opinion_shift_dict['opinion_weight'].append(agent.opinion_weight)
 
 
     opinion_shift_df = pd.DataFrame(opinion_shift_dict)
-
-
-
-    start = data_start_datetime
-    end = data_end_datetime
-    step = timedelta(minutes=srconst.minutes_step)
-
-    total = int((end - start) / step) + 1
 
     logger.info(f"Set simulation start date on: {start}")
     logger.info(f"Set simulation end date on: {end}")
@@ -218,45 +248,93 @@ def main():
     logger.info(f"Progress will be tracked every {track_every} steps")
 
     with ctx as cb:  # pyright: ignore[reportGeneralTypeIssues]
-        for time_step in tqdm(srcutils.datetime_range(start,end,srconst.minutes_step),total=total,desc='Simulation'):
+        for time_step in tqdm(srcutils.datetime_range(simulation_start,end,srconst.minutes_step),total=total,desc='Simulation'):
             k +=1
             if k>10 and args.debug : break
+            
             step_text_data = sim_text_data[(sim_text_data['datetime']==time_step)& (sim_text_data['interaction_type']=='original')]
             step_interaction_data = sim_interaction_data[sim_interaction_data['datetime']==time_step]
             
-            batch_agents = []
-            batch_new_activity = []
+            batch_originals = [] # list of dict
+            batch_interactions = [] # list of dict
 
-            # load agent and create activity
+            # CREATE SYNTHETIC ORIGINALS
             if len(step_text_data)>0:
                 for i,row in enumerate(step_text_data.itertuples()): #original posts
                     agent = Agent.from_json(f"{EXPERIMENT_PERSONA_DIR}/{row.author}.json")
-                    new_activity = {'datetime':row.datetime.strftime('%Y-%m-%d %H:%M:%S'), # type: ignore
-                                'memory': srcutils.create_original_memory(row.text,
-                                                        row.likes_count,
-                                                        row.reposts_count)
-                                
-                                }
-                    batch_agents.append(agent)
-                    batch_new_activity.append(new_activity)
-                    
+                    batch_originals.append({
+                        'idx':i,
+                        'type': 'original',
+                        'datetime':row.datetime.strftime('%Y-%m-%d %H:%M:%S'), # type: ignore
+                        'tweet_id':row.Index,
+                        'agent':agent
+                    })
+            
+                batch_synthetic_post = synthetic_generator.batch_original([x['agent'] for x in batch_originals])
+            else:
+                batch_synthetic_post= []
+
+            # update the original texts in sim_text_data
+            for tweet_id,synth_text in zip([x['tweet_id'] for x in batch_originals],batch_synthetic_post):
+                sim_text_data.loc[tweet_id,'text']=synth_text
+
+            # CREATE SYNTHETIC REPLY
             if len(step_interaction_data)>0:
-                for i,row in enumerate(step_interaction_data.itertuples()):
+                for i, row in enumerate(step_interaction_data.itertuples()): #original posts
                     agent = Agent.from_json(f"{EXPERIMENT_PERSONA_DIR}/{row.source_author}.json")
-                    if row.interaction_type =='reply': #replies
-                        new_activity = {'datetime':row.datetime.strftime('%Y-%m-%d %H:%M:%S'), # type: ignore
-                                    'memory': srcutils. create_reply_memory_without_weight(
-                                                                sim_text_data.loc[row.source_tweet_id,'text'], # type: ignore
-                                                                sim_text_data.loc[row.target_tweet_id,'text'] # type: ignore
-                                                                )
-                                    }
-                    elif row.interaction_type =='retweet': #retweet
-                        new_activity = {'datetime':row.datetime.strftime('%Y-%m-%d %H:%M:%S'), # type: ignore
-                                    'memory': srcutils.create_retweet_memory(
-                                                sim_text_data.loc[row.target_tweet_id,'text'] # type: ignore
-                                    )}
-                    batch_agents.append(agent)
-                    batch_new_activity.append(new_activity)
+                    batch_interactions.append(
+                        {'idx':i,
+                        'type':row.interaction_type,
+                        'source_tweet_id':row.source_tweet_id,
+                        'target_tweet_id':row.target_tweet_id,
+                        'datetime': row.datetime.strftime('%Y-%m-%d %H:%M:%S'), # type: ignore
+                        'agent':agent}
+                    )
+
+                batch_reply_interactions = [x for x in batch_interactions if x['type'] == 'reply']
+                batch_synthetic_reply = synthetic_generator.batch_reply([x['agent'] for x in batch_reply_interactions], 
+                                                                        [str(sim_text_data.loc[x['target_tweet_id'],'text']) 
+                                                                        for x in batch_reply_interactions])
+                                                                        
+            else:
+                batch_reply_interactions = []
+                batch_synthetic_reply = []
+
+            # update the reply texts in sim_text_data
+            for reply_interaction,synth_text in zip(batch_reply_interactions,batch_synthetic_reply):
+                sim_text_data.loc[reply_interaction['source_tweet_id'],'text']=synth_text
+
+            batch_agents = []
+            batch_new_activity = []
+
+            for original in batch_originals:
+                batch_agents.append(original['agent'])
+                batch_new_activity.append({
+                    'datetime': original['datetime'],
+                    'memory': srcutils.create_synthetic_original_memory(
+                        sim_text_data.loc[original['tweet_id'],'text']
+                    )
+
+                })
+            
+            for interaction in batch_interactions:
+                batch_agents.append(interaction['agent'])
+                if interaction['type'] == 'reply':
+                    batch_new_activity.append({
+                        'datetime': interaction['datetime'],
+                        'memory': srcutils.create_reply_memory_without_weight(
+                            sim_text_data.loc[interaction['source_tweet_id'],'text'],
+                            sim_text_data.loc[interaction['target_tweet_id'],'text'],
+                        )
+
+                    })
+                else:
+                    batch_new_activity.append({
+                        'datetime':interaction['datetime'],
+                        'memory': srcutils.create_retweet_memory(
+                                    sim_text_data.loc[interaction['target_tweet_id'],'text']
+                        )}
+                    )
 
             if len(batch_new_activity)>0:
                 
@@ -289,7 +367,7 @@ def main():
             # save periodically
             if k % track_every == 0:
                 logger.info(f"{k}/{total} steps, Invoke time: {invoke_time}s, current weight updated: {weight_updates}")
-                opinion_shift_df.to_csv(os.path.join(EXPERIMENT_OUTPUT_DIR,f'opinion_shift_step_{k}_{total}.csv'),
+                opinion_shift_df.to_csv(os.path.join(srconst.OUTPUT_DIR,modelname,f'opinion_shift_step_{k}_{total}.csv'),
                                             index=False,
                                             sep=';')
                 
@@ -298,18 +376,18 @@ def main():
                     openai_usage = {
                         'step': k,
                         'Run Information': f"{model_name}: {invoke_time}s",
-                        "Total Tokens": cb.total_tokens, # type: ignore
-                        "Prompt Tokens": cb.prompt_tokens, # type: ignore
-                        "Completion Tokens": cb.completion_tokens, # type: ignore
-                        "Total Cost (USD)": f"${cb.total_cost:.4f}" # type: ignore
+                        "Total Tokens": cb.total_tokens,
+                        "Prompt Tokens": cb.prompt_tokens,
+                        "Completion Tokens": cb.completion_tokens,
+                        "Total Cost (USD)": f"${cb.total_cost:.4f}"
                     }
-                    with open(os.path.join(EXPERIMENT_LOG_DIR,f'{srconst.today_str}_{topic_num}_openai_usage.log'),'a') as f:
+                    with open(os.path.join(EXPERIMENT_LOG_DIR,'openai_usage.log'),'a') as f:
                         f.write(json.dumps(openai_usage, indent=4 ,ensure_ascii=False) + "\n")
-        #save at the end of iteration    
-        logger.info(f"{k}/{total} steps, Invoke time: {invoke_time}s, current weight updated: {weight_updates}")
-        opinion_shift_df.to_csv(os.path.join(EXPERIMENT_OUTPUT_DIR,f'opinion_shift_step_{k}_{total}.csv'),
-                                    index=False,
-                                    sep=';')
+            
+            logger.info(f"{k}/{total} steps, Invoke time: {invoke_time}s, current weight updated: {weight_updates}")
+            opinion_shift_df.to_csv(os.path.join(srconst.OUTPUT_DIR,modelname,f'opinion_shift_step_{k}_{total}.csv'),
+                                        index=False,
+                                        sep=';')
 
 if __name__ == "__main__":
     main()
