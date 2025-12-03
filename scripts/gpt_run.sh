@@ -6,7 +6,7 @@
 # Specify hard time limit for the job. 
 #   The job will be aborted if it runs longer than this time.
 #   The default time is 12 hours
-#$ -l h_rt=120:00:00
+#$ -l h_rt=80:00:00
 
 # Send an email when the job finishes or if it is aborted (by default no email is sent).
 #$ -m ea
@@ -30,7 +30,7 @@ echo "Job ID : $JOB_ID"
 echo "=========================================================="
 
 CONFIG="configs/gpt_config.ini"
-SIMULATE="false" # "false" or "true"
+SIMULATE="true" # "false" or "true"
 
 module load cuda/12.2 gcc/12.2.0 python3/3.10.12
 
@@ -41,8 +41,8 @@ set +a
 source /projectnb/llamagrp/izzan/env/bin/activate
 if [[ "$SIMULATE" == "true" ]]; then
     echo "Running synthetic simulation..."
-    python -m simulation.synthetic_simulation_run -c "$CONFIG"
+    python -m simulation.synthetic_simulation_run -c "$CONFIG" --debug
 else
     echo "Running simulation based on real data..."
-    python -m simulation.simulation_run -c "$CONFIG"
+    python -m simulation.simulation_run -c "$CONFIG" --debug
 fi

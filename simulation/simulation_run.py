@@ -173,11 +173,6 @@ def main():
         else:
             logger.error(f"Failed to initiate agent {user}")
 
-    # remove every FIRST interaction of each user
-
-    sim_text_data = sim_text_data[sim_text_data['author'].duplicated(keep='first')]
-    sim_interaction_data = sim_interaction_data[sim_interaction_data['source_author'].duplicated(keep='first')]
-
 
     # INITIATE TRACKER
 

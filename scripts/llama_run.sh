@@ -6,7 +6,7 @@
 # Specify hard time limit for the job. 
 #   The job will be aborted if it runs longer than this time.
 #   The default time is 12 hours
-#$ -l h_rt=120:00:00
+#$ -l h_rt=60:00:00
 
 # Send an email when the job finishes or if it is aborted (by default no email is sent).
 #$ -m ea
@@ -36,7 +36,7 @@ echo "=========================================================="
 
 MODEL="nvidia/Llama-3.1-Nemotron-Nano-8B-v1"
 CONFIG="configs/llama_config.ini"
-SIMULATE="false" # "false" or "true"
+SIMULATE="true" # "false" or "true"
 
 MODEL_SAFE=$(echo "$MODEL" | tr '[:upper:]/' '[:lower:]_' )
 LOG_DIR="logs/${MODEL_SAFE}"

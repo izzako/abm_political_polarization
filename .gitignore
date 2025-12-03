@@ -213,4 +213,4 @@ persona/
 outputs/
 outputs_*/
 logs/
-*.o1*
+abm_*.o*

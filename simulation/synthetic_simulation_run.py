@@ -148,7 +148,7 @@ def main():
     end = data_end_datetime
     step = timedelta(minutes=srconst.minutes_step)
 
-    total = int((end - start) / step) + 1
+    total = int((end - simulation_start) / step) + 1
     
     # LOAD DATA
     logger.info("Loading data...")
@@ -169,7 +169,7 @@ def main():
     # make sure referenced target text is available
     sim_interaction_data = interaction_data[interaction_data['target_tweet_id'].isin(sim_text_data.index)].copy()
     sim_interaction_data = sim_interaction_data[~((sim_interaction_data['interaction_type']=='reply')&
-                    ~(sim_interaction_data['source_tweet_id'].isin(sim_text_data.index)))]
+                    ~(sim_interaction_data['source_tweet_id'].isin(sim_text_data.index)))].copy()
     sim_text_data.loc[sim_text_data.datetime >= simulation_start,'text'] = '' # erase simulation text to ensure no leakage
     
     #initialization for agents personality
@@ -177,17 +177,18 @@ def main():
     initialize_sim_interaction_data = interaction_data[interaction_data.datetime < simulation_start]
 
 
-    # INITATE AGENTS
+    
     logger.info(f"Initate agents data...")
-    summarize_batch = 10
+    summarize_batch = 5
     initiate_track = 0
     
     with ctx as cb:
+        # INITATE AGENTS
         for batch in tqdm(srcutils.chunk_list(author_data['author'].tolist(), summarize_batch), desc=f"Initialize agents with batch {summarize_batch}"):
             batch_inputs = []
             agents = []
-            initate_track += len(batch)
-            for user in tqdm(batch,leave=False,desc="prep prompt"):
+            initiate_track += len(batch)
+            for user in batch:
                 activities = srcutils._get_all_activity(initialize_sim_text_data, initialize_sim_interaction_data, user)
                 agent = Agent(author_data[author_data['author'] == user].iloc[0].to_dict())
                 agents.append(agent)
@@ -200,14 +201,15 @@ def main():
                 print(f"Batch call failed: {e}")
                 responses = [None]*summarize_batch  # or handle appropriately
             
-            for agent, response in tqdm(zip(agents, responses),desc='load_to_json',leave=False):
+            for agent, response in zip(agents, responses):
                 assert type(response) is MemorySummarySchema
                 agent.initialize_synthetic(response.summary)
                 agent.save_json(f'{EXPERIMENT_PERSONA_DIR}/{agent.name}.json')
 
+            logger.info(f'Initiated {initiate_track}/{len(author_data)} agents...')
             if 'gpt' in modelname:
                 openai_usage ={
-                    "Compound Num. of Agents":initate_track,
+                    "Compound Num. of Agents":initiate_track,
                     "Total Tokens": cb.total_tokens, # type: ignore
                     "Prompt Tokens": cb.prompt_tokens, # type: ignore
                     "Completion Tokens": cb.completion_tokens, # type: ignore
@@ -217,37 +219,38 @@ def main():
                     f.write(json.dumps(openai_usage, indent=4 ,ensure_ascii=False) + "\n")
 
 
-    # INITIATE TRACKER
+        # INITIATE TRACKER
 
-    logger.info(f"Initate tracker data, outputs on: {os.path.join(srconst.OUTPUT_DIR,modelname)}")
+        logger.info(f"Initate tracker data, outputs on: {os.path.join(srconst.OUTPUT_DIR,modelname)}")
 
-    opinion_shift_dict = {
-        'time_step':[],
-        'agent':[],
-        'opinion_weight':[]
-    }
+        opinion_shift_dict = {
+            'time_step':[],
+            'agent':[],
+            'opinion_weight':[]
+        }
 
-    for user in tqdm(author_data['author'],desc='Adding agents weight to tracker'):
-        opinion_shift_dict['time_step'].append(simulation_start)
-        agent = Agent.from_json(f"{EXPERIMENT_PERSONA_DIR}/{user}.json")
-        opinion_shift_dict['agent'].append(agent.name)
-        opinion_shift_dict['opinion_weight'].append(agent.opinion_weight)
-
-
-    opinion_shift_df = pd.DataFrame(opinion_shift_dict)
-
-    logger.info(f"Set simulation start date on: {start}")
-    logger.info(f"Set simulation end date on: {end}")
-    logger.info(f"Set simulation step: {step}")
-    logger.info(f"Total simulation steps: {total}")
+        for user in tqdm(author_data['author'],desc='Adding agents weight to tracker'):
+            opinion_shift_dict['time_step'].append(simulation_start)
+            agent = Agent.from_json(f"{EXPERIMENT_PERSONA_DIR}/{user}.json")
+            opinion_shift_dict['agent'].append(agent.name)
+            opinion_shift_dict['opinion_weight'].append(agent.opinion_weight)
 
 
-    k = 0
-    track_every = track_every # step (1 step = 15 minutes)
+        opinion_shift_df = pd.DataFrame(opinion_shift_dict)
 
-    logger.info(f"Progress will be tracked every {track_every} steps")
+        logger.info(f"Data Initialization: {start} - {simulation_start}")
+        logger.info(f"Set simulation start date on: {simulation_start}")
+        logger.info(f"Set simulation end date on: {end}")
+        logger.info(f"Set simulation step: {step}")
+        logger.info(f"Total simulation steps: {total}")
 
-    with ctx as cb:  # pyright: ignore[reportGeneralTypeIssues]
+
+        k = 0
+        track_every = track_every # step (1 step = 15 minutes)
+
+        logger.info(f"Progress will be tracked every {track_every} steps")
+
+        # START SIMULATION HERE
         for time_step in tqdm(srcutils.datetime_range(simulation_start,end,srconst.minutes_step),total=total,desc='Simulation'):
             k +=1
             if k>10 and args.debug : break

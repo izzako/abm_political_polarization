@@ -36,7 +36,7 @@ echo "=========================================================="
 
 MODEL="Qwen/Qwen3-8B-FP8"
 CONFIG="configs/qwen_config.ini"
-SIMULATE="false" # "false" or "true"
+SIMULATE="true" # "false" or "true"
 
 MODEL_SAFE=$(echo "$MODEL" | tr '[:upper:]/' '[:lower:]_' )
 LOG_DIR="logs/${MODEL_SAFE}"
