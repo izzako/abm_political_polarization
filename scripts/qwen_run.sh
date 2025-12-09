@@ -51,10 +51,9 @@ source /projectnb/llamagrp/izzan/env/bin/activate
 hf auth login --token "$HF_TOKEN" --add-to-git-credential
 mkdir -p "$LOG_DIR"
 nohup vllm serve "$MODEL" \
-    --reasoning-parser deepseek_r1 \
-    --tensor-parallel-size 1 \
-    --max-model-len 16384 \
-    > "$LOG_DIR/vllm_$JOB_ID.log" 2>&1 &
+        --reasoning-parser deepseek_r1 \
+        --tensor-parallel-size 1 \
+        > "$LOG_DIR/vllm_$JOB_ID.log" 2>&1 &
 
 echo "Starting vLLM for $MODEL (logs in $LOG_DIR)..."
 

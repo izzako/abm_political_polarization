@@ -198,7 +198,7 @@ def main():
             try:
                 responses = summarizer_llm.with_structured_output(MemorySummarySchema).batch(batch_inputs) # type: ignore
             except Exception as e:
-                print(f"Batch call failed: {e}")
+                logger.error(f"Batch call failed: {e}")
                 responses = [None]*summarize_batch  # or handle appropriately
             
             for agent, response in zip(agents, responses):
@@ -221,7 +221,7 @@ def main():
 
         # INITIATE TRACKER
 
-        logger.info(f"Initate tracker data, outputs on: {os.path.join(srconst.OUTPUT_DIR,modelname)}")
+        logger.info(f"Initate tracker data, outputs on: {EXPERIMENT_OUTPUT_DIR}")
 
         opinion_shift_dict = {
             'time_step':[],
@@ -370,7 +370,7 @@ def main():
             # save periodically
             if k % track_every == 0:
                 logger.info(f"{k}/{total} steps, Invoke time: {invoke_time}s, current weight updated: {weight_updates}")
-                opinion_shift_df.to_csv(os.path.join(srconst.OUTPUT_DIR,modelname,f'opinion_shift_step_{k}_{total}.csv'),
+                opinion_shift_df.to_csv(os.path.join(EXPERIMENT_OUTPUT_DIR,f'opinion_shift_step_{k}_{total}.csv'),
                                             index=False,
                                             sep=';')
                 
@@ -388,7 +388,7 @@ def main():
                         f.write(json.dumps(openai_usage, indent=4 ,ensure_ascii=False) + "\n")
         #save at the end of iteration      
         logger.info(f"{k}/{total} steps, Invoke time: {invoke_time}s, current weight updated: {weight_updates}")
-        opinion_shift_df.to_csv(os.path.join(srconst.OUTPUT_DIR,modelname,f'opinion_shift_step_{k}_{total}.csv'),
+        opinion_shift_df.to_csv(os.path.join(EXPERIMENT_OUTPUT_DIR,f'opinion_shift_step_{k}_{total}.csv'),
                                     index=False,
                                     sep=';')
 
