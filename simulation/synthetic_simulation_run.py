@@ -80,7 +80,6 @@ def main():
 
     elif 'qwen' in model_name.lower():
         
-
         llm = ChatOpenAI(
             model=model_name,
             openai_api_key="EMPTY",  # type: ignore
