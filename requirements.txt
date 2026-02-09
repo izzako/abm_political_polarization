@@ -9,3 +9,4 @@ langchain-community
 langchain-openai
 flashinfer-python
 vllm
+scikit-learn

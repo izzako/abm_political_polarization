@@ -32,11 +32,11 @@ def get(key, section):
 sentiment_map = {'positive':1,'negative':-1,'neutral':0}
 inverse_sentiment_map = {1:'positive',-1:'negative',0:'neutral',None:'unknown'}
 minutes_step = 15 # depends on data datetime granularity
-topics = ['pemilu / curang / presiden', 
-          'prabowo / jokowi / dukung',
-          'ganjar / mahfud / putar', 
-          'anies / amin / ubah',
-          'count / quick / quick_count']
+topics = ['pemilu / curang / presiden', #0
+          'prabowo / jokowi / dukung', #1
+          'ganjar / mahfud / putar', #2
+          'anies / amin / ubah', #3
+          'count / quick / quick_count' ]#4
 
 # DEFAULT PATHS
 LOG_DIR = './logs'
