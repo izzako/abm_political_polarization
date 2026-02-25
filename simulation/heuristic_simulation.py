@@ -200,7 +200,7 @@ def initialize_opinions_with_retweets(text_df, interaction_df, user_to_idx, days
     text_df['datetime'] = pd.to_datetime(text_df['datetime'])
     interaction_df['datetime'] = pd.to_datetime(interaction_df['datetime'])
     
-    # 2. Define Day 1 Window
+    # 2. Define Init days Window
     start_date = pd.Timestamp('2024-02-01 00:00:00')
     end_of_day1 = start_date + pd.Timedelta(days=days)
     
