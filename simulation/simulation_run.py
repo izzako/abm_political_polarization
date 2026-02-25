@@ -25,7 +25,7 @@ from langchain_community.callbacks import get_openai_callback
 from langchain_core.prompts.prompt import PromptTemplate
 from langchain_openai import ChatOpenAI
 
-from src.agents import Agent
+from src.agents import Agent, MemorySummarySchema
 from src.opinion_classifier import OpinionClassifier
 import src.utils as srcutils
 import src.const as srconst
@@ -53,7 +53,7 @@ def main():
 
     data_start_datetime = datetime.strptime(srconst.get('data_start_datetime','SIMULATION'), '%Y-%m-%d %H:%M:%S')
     data_end_datetime = datetime.strptime(srconst.get('data_end_datetime','SIMULATION'), '%Y-%m-%d %H:%M:%S')
-    track_every = int(srconst.get('track_every','SIMULATION'))
+    track_every = int(srconst.get('track_every','SIMULATION')) ## step (1 step = 15 minutes)
     topic_num = int(srconst.get('topic_num','SIMULATION'))
 
     model_name = srconst.get('model_name','MODEL')
@@ -78,8 +78,6 @@ def main():
         modelname = model_name.lower()
 
     elif 'qwen' in model_name.lower():
-        
-
         llm = ChatOpenAI(
             model=model_name,
             openai_api_key="EMPTY",  # type: ignore
@@ -121,6 +119,15 @@ def main():
     EXPERIMENT_LOG_DIR = os.path.join(srconst.LOG_DIR,modelname)
     EXPERIMENT_PERSONA_DIR = os.path.join(srconst.PERSONA_DIR,modelname,str(topic_num))
 
+    # date
+    init_time_personality = int(srconst.get('timeframe_init','SIMULATION')) #days
+    start = data_start_datetime
+    simulation_start = start + pd.Timedelta(days=init_time_personality)
+    end = data_end_datetime
+    step = timedelta(minutes=srconst.minutes_step)
+
+    total = int((end - simulation_start) / step) + 1
+
     os.makedirs(EXPERIMENT_LOG_DIR,exist_ok=True)
     os.makedirs(EXPERIMENT_OUTPUT_DIR,exist_ok=True)
     os.makedirs(EXPERIMENT_PERSONA_DIR,exist_ok=True)
@@ -159,61 +166,94 @@ def main():
     # make sure referenced target text is available
     sim_interaction_data = interaction_data[interaction_data['target_tweet_id'].isin(sim_text_data.index)].copy()
     sim_interaction_data = sim_interaction_data[~((sim_interaction_data['interaction_type']=='reply')&
-                    ~(sim_interaction_data['source_tweet_id'].isin(sim_text_data.index)))]
+                    ~(sim_interaction_data['source_tweet_id'].isin(sim_text_data.index)))].copy()
+    
+    #initialization for agents personality
+    initialize_sim_text_data = sim_text_data[sim_text_data.datetime < simulation_start]
+    initialize_sim_interaction_data = sim_interaction_data[sim_interaction_data.datetime < simulation_start]
 
+    # list all user
+    list_agents = sorted(list(set(sim_text_data['author'].to_list() + # type: ignore
+    sim_interaction_data['source_author'].to_list() + # type: ignore
+    sim_interaction_data['target_author'].to_list())))# type: ignore
 
     # INITATE AGENTS
-    logger.info(f"Initate agents data...")
-    for user in tqdm(author_data['author'],desc='Initiating agents'):
-        first_activity = srcutils._get_first_activity(sim_text_data,sim_interaction_data,user)
-        if first_activity:
-            test_agent = Agent(author_data[author_data['author'] == user].iloc[0].to_dict())
-            test_agent.initialize(first_activity)
-            test_agent.save_json(f'{EXPERIMENT_PERSONA_DIR}/{test_agent.name}.json')
-        else:
-            logger.error(f"Failed to initiate agent {user}")
+
+    summarize_batch = 5
+    initiate_track = 0
+    
+    with ctx as cb:
+        logger.info(f"Initate agents data...")
+        # INITATE AGENTS
+        for batch in tqdm(srcutils.chunk_list(list_agents, summarize_batch), desc=f"Initialize agents with batch {summarize_batch}"):
+            batch_inputs = []
+            agents = []
+            initiate_track += len(batch)
+            for user in batch:
+                activities = srcutils._get_all_activity(initialize_sim_text_data, initialize_sim_interaction_data, user)
+                agent = Agent(author_data[author_data['author'] == user].iloc[0].to_dict())
+                agents.append(agent)
+                batch_inputs.append(agent.prep_init_synthetic(activities))
+            
+            # Batch call
+            try:
+                if batch_inputs:
+                    responses = summarizer_llm.with_structured_output(MemorySummarySchema).batch(batch_inputs) # type: ignore
+                else:
+                    responses = [None]*summarize_batch  # or handle appropriately
+            except Exception as e:
+                logger.error(f"Batch call failed: {e}")
+                responses = [None]*summarize_batch  # or handle appropriately
+            
+            for agent, response in zip(agents, responses):
+                agent.initialize_synthetic(response.summary)
+                agent.save_json(f'{EXPERIMENT_PERSONA_DIR}/{agent.name}.json')
+
+            logger.info(f'Initiated {initiate_track}/{len(list_agents)} agents...')
+            if 'gpt' in modelname:
+                openai_usage ={
+                    "Compound Num. of Agents":initiate_track,
+                    "Total Tokens": cb.total_tokens, # type: ignore
+                    "Prompt Tokens": cb.prompt_tokens, # type: ignore
+                    "Completion Tokens": cb.completion_tokens, # type: ignore
+                    "Total Cost (USD)": f"${cb.total_cost:.4f}" # type: ignore
+                    }
+                with open(os.path.join(EXPERIMENT_LOG_DIR,f'{srcutils.today_str}_{topic_num}_agent_initiate_openai_usage.log'),'a') as f:
+                    f.write(json.dumps(openai_usage, indent=4 ,ensure_ascii=False) + "\n")
 
 
-    # INITIATE TRACKER
+        # INITIATE TRACKER
 
-    logger.info(f"Initate tracker data, outputs on: {EXPERIMENT_OUTPUT_DIR}")
+        logger.info(f"Initate tracker data, outputs on: {EXPERIMENT_OUTPUT_DIR}")
 
-    opinion_shift_dict = {
-        'time_step':[],
-        'agent':[],
-        'opinion_weight':[]
-    }
+        opinion_shift_dict = {
+            'time_step':[],
+            'agent':[],
+            'opinion_weight':[]
+        }
 
-    for user in tqdm(author_data['author'],desc='Adding agents weight to tracker'):
-        opinion_shift_dict['time_step'].append(data_start_datetime)
-        agent = Agent.from_json(f"{EXPERIMENT_PERSONA_DIR}/{user}.json")
-        opinion_shift_dict['agent'].append(agent.name)
-        opinion_shift_dict['opinion_weight'].append(agent.opinion_weight)
-
-
-    opinion_shift_df = pd.DataFrame(opinion_shift_dict)
+        for user in tqdm(list_agents,desc='Adding agents weight to tracker'):
+            opinion_shift_dict['time_step'].append(simulation_start-step)
+            agent = Agent.from_json(f"{EXPERIMENT_PERSONA_DIR}/{user}.json")
+            opinion_shift_dict['agent'].append(agent.name)
+            opinion_shift_dict['opinion_weight'].append(agent.opinion_weight)
 
 
+        opinion_shift_df = pd.DataFrame(opinion_shift_dict)
 
-    start = data_start_datetime
-    end = data_end_datetime
-    step = timedelta(minutes=srconst.minutes_step)
+        
 
-    total = int((end - start) / step) + 1
-
-    logger.info(f"Set simulation start date on: {start}")
-    logger.info(f"Set simulation end date on: {end}")
-    logger.info(f"Set simulation step: {step}")
-    logger.info(f"Total simulation steps: {total}")
+        logger.info(f"Set simulation start date on: {start}")
+        logger.info(f"Set simulation end date on: {end}")
+        logger.info(f"Set simulation step: {step}")
+        logger.info(f"Total simulation steps: {total}")
 
 
-    k = 0
-    track_every = track_every # step (1 step = 15 minutes)
+        k = 0
+        logger.info(f"Progress will be tracked every {track_every} steps")
 
-    logger.info(f"Progress will be tracked every {track_every} steps")
-
-    with ctx as cb:  # pyright: ignore[reportGeneralTypeIssues]
-        for time_step in tqdm(srcutils.datetime_range(start,end,srconst.minutes_step),total=total,desc='Simulation'):
+        # START SIMULATION HERE
+        for time_step in tqdm(srcutils.datetime_range(simulation_start,end,srconst.minutes_step),total=total,desc='Simulation'):
             k +=1
             if k>10 and args.debug : break
             step_text_data = sim_text_data[(sim_text_data['datetime']==time_step)& (sim_text_data['interaction_type']=='original')]
@@ -254,7 +294,6 @@ def main():
                     batch_new_activity.append(new_activity)
 
             if len(batch_new_activity)>0:
-                
                 # opinion classifier
                 invoke_start = time.time()
                 batch_reasoning, batch_delta = oc.batch_classify(

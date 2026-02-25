@@ -109,88 +109,150 @@ def _get_first_activity(text_data,interaction_data,author_id):
     
 def _get_all_activity(text_data, interaction_data, author_id):
     '''Returns all activities for an author as a list of dictionaries, sorted by datetime'''
-    
-    interactions = interaction_data[interaction_data['source_author'] == author_id]
-    texts = text_data[text_data['author'] == author_id]
-    
-    # No activity found
-    if interactions.empty and texts.empty:
+
+    # RETWEET — merge to get sentiment from target tweet (same as get_real_historical2)
+    retweet_df = interaction_data.loc[
+        (interaction_data['source_author'] == author_id) &
+        (interaction_data['interaction_type'] == 'retweet'),
+        ['datetime', 'target_tweet_id', 'target_author']
+    ].merge(
+        text_data.reset_index()[['tweet_id', 'sentiment_label', 'text']],
+        how='left',
+        left_on='target_tweet_id',
+        right_on='tweet_id'
+    )
+
+    # REPLY AND ORIGINAL — all texts authored by user
+    reply_original_df = text_data.loc[
+        text_data['author'] == author_id,
+        ['datetime', 'sentiment_label', 'text', 'interaction_type', 'likes_count', 'reposts_count']
+    ]
+
+    if retweet_df.empty and reply_original_df.empty:
         return []
-    
+
     activities = []
-    
-    # Process all interactions (retweets/replies)
-    for _, interaction in interactions.iterrows():
-        activity_type = interaction['interaction_type']
-        
-        result = {
-            'activity_type': activity_type,
-            'target_author': None,
-            'activity_datetime': interaction['datetime'],
-            'target_text': None,
-            'target_weight': None,
-            'source_text': None,
-            'source_weight': None,
+
+    # Process retweets
+    for _, row in retweet_df.iterrows():
+        activities.append({
+            'activity_type': 'retweet',
+            'target_author': row.get('target_author'),
+            'activity_datetime': row['datetime'],
+            'target_text': row['text'],
+            'target_weight': sentiment_map[row['sentiment_label']] if pd.notna(row['sentiment_label']) else None,
+            'source_text': row['text'],
+            'source_weight': sentiment_map[row['sentiment_label']] if pd.notna(row['sentiment_label']) else None,
             'likes_count': None,
             'reposts_count': None,
-        }
-        
-        if activity_type == 'retweet':
-            target = text_data.loc[interaction['target_tweet_id']]
-            result.update({
-                'target_author': interaction['target_author'],
-                'target_text': target['text'],
-                'target_weight': sentiment_map[target['sentiment_label']],
-                'source_weight': sentiment_map[target['sentiment_label']],
-            })
-        elif activity_type == 'reply':
-            target_id = interaction['target_tweet_id']
-            # Find the corresponding text for this reply
-            reply_text = texts[texts['datetime'] == interaction['datetime']]
-            if not reply_text.empty:
-                reply_text = reply_text.iloc[0]
-                result.update({
-                    'target_author': interaction['target_author'],
-                    'target_text': text_data.loc[target_id, 'text'],
-                    'target_weight': sentiment_map[text_data.loc[target_id, 'sentiment_label']],
-                    'source_text': reply_text['text'],
-                    'source_weight': sentiment_map[reply_text['sentiment_label']],
-                    'likes_count': reply_text['likes_count'],
-                    'reposts_count': reply_text['reposts_count'],
-                })
-        
-        activities.append(result)
-    
-    # Process all original texts (those not already processed as replies)
-    interaction_datetimes = set(interactions['datetime']) if not interactions.empty else set()
-    for _, text in texts.iterrows():
-        # Skip if this text was already processed as a reply
-        if text['datetime'] in interaction_datetimes:
-            continue
-        
-        activity_type = text['interaction_type']
-        result = {
+        })
+
+    # Process replies and originals (no deduplication, same as get_real_historical2)
+    for _, row in reply_original_df.iterrows():
+        activity_type = row['interaction_type']
+        activities.append({
             'activity_type': activity_type,
             'target_author': None,
-            'activity_datetime': text['datetime'],
+            'activity_datetime': row['datetime'],
             'target_text': None,
             'target_weight': None,
-            'source_text': text['text'],
-            'source_weight': sentiment_map[text['sentiment_label']],
-            'likes_count': text['likes_count'],
-            'reposts_count': text['reposts_count'],
-        }
-        activities.append(result)
-    
-    # Sort by datetime
+            'source_text': row['text'],
+            'source_weight': sentiment_map[row['sentiment_label']] if pd.notna(row['sentiment_label']) else None,
+            'likes_count': row.get('likes_count'),
+            'reposts_count': row.get('reposts_count'),
+        })
+
     activities.sort(key=lambda x: x['activity_datetime'])
-    
+
     return activities
+
+# def _get_all_activity(text_data, interaction_data, author_id):
+#     '''Returns all activities for an author as a list of dictionaries, sorted by datetime'''
+    
+#     interactions = interaction_data[interaction_data['source_author'] == author_id]
+#     texts = text_data[text_data['author'] == author_id]
+    
+#     # No activity found
+#     if interactions.empty and texts.empty:
+#         return []
+    
+#     activities = []
+    
+#     # Process all interactions (retweets/replies)
+#     for _, interaction in interactions.iterrows():
+#         activity_type = interaction['interaction_type']
+        
+#         result = {
+#             'activity_type': activity_type,
+#             'target_author': None,
+#             'activity_datetime': interaction['datetime'],
+#             'target_text': None,
+#             'target_weight': None,
+#             'source_text': None,
+#             'source_weight': None,
+#             'likes_count': None,
+#             'reposts_count': None,
+#         }
+        
+#         if activity_type == 'retweet':
+#             target = text_data.loc[interaction['target_tweet_id']]
+#             result.update({
+#                 'target_author': interaction['target_author'],
+#                 'target_text': target['text'],
+#                 'target_weight': sentiment_map[target['sentiment_label']],
+#                 'source_weight': sentiment_map[target['sentiment_label']],
+#             })
+#         elif activity_type == 'reply':
+#             target_id = interaction['target_tweet_id']
+#             # Find the corresponding text for this reply
+#             reply_text = texts[texts['datetime'] == interaction['datetime']]
+#             if not reply_text.empty:
+#                 reply_text = reply_text.iloc[0]
+#                 result.update({
+#                     'target_author': interaction['target_author'],
+#                     'target_text': text_data.loc[target_id, 'text'],
+#                     'target_weight': sentiment_map[text_data.loc[target_id, 'sentiment_label']],
+#                     'source_text': reply_text['text'],
+#                     'source_weight': sentiment_map[reply_text['sentiment_label']],
+#                     'likes_count': reply_text['likes_count'],
+#                     'reposts_count': reply_text['reposts_count'],
+#                 })
+        
+#         activities.append(result)
+    
+#     # Process all original texts (those not already processed as replies)
+#     interaction_datetimes = set(interactions['datetime']) if not interactions.empty else set()
+#     for _, text in texts.iterrows():
+#         # Skip if this text was already processed as a reply
+#         if text['datetime'] in interaction_datetimes:
+#             continue
+        
+#         if text['interaction_type']!='original':
+#             continue
+
+#         activity_type = text['interaction_type']
+#         result = {
+#             'activity_type': activity_type,
+#             'target_author': None,
+#             'activity_datetime': text['datetime'],
+#             'target_text': None,
+#             'target_weight': None,
+#             'source_text': text['text'],
+#             'source_weight': sentiment_map[text['sentiment_label']],
+#             'likes_count': text['likes_count'],
+#             'reposts_count': text['reposts_count'],
+#         }
+#         activities.append(result)
+    
+#     # Sort by datetime
+#     activities.sort(key=lambda x: x['activity_datetime'])
+    
+#     return activities
 
 def datetime_range(start, end, step_minutes=15):
     current = start
     step = timedelta(minutes=step_minutes)
-    while current <= end:
+    while current < end:
         yield current
         current += step
 

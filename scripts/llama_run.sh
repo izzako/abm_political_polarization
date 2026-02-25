@@ -36,7 +36,7 @@ echo "=========================================================="
 
 MODEL="nvidia/Llama-3.1-Nemotron-Nano-8B-v1"
 CONFIG="configs/llama_config.ini"
-SIMULATE="true" # "false" or "true"
+SIMULATE="false" # "false" or "true"
 
 MODEL_SAFE=$(echo "$MODEL" | tr '[:upper:]/' '[:lower:]_' )
 LOG_DIR="logs/${MODEL_SAFE}"

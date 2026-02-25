@@ -130,7 +130,8 @@ class Agent:
         summarize_template = build_summarize_template()
         prompt = summarize_template.format(memories=initialized_memory)
         if len(initialized_memory)>0:
-            self.opinion_weight = float(get('INIT_OPINION_NORMALIZATION','AGENTS'))*sum(initialized_weight)/len(initialized_weight)
+            self.memory += initialized_memory
+            self.opinion_weight = sum(initialized_weight)/len(initialized_weight)
             self.summarized_memory['recency'] = len(initialized_memory)
         else:
             logger.debug(f"No memory to summarize for agent {self.name}")
@@ -140,7 +141,10 @@ class Agent:
         return prompt
 
     def initialize_synthetic(self, summary : str):
-        self.summarized_memory['memory'] = summary 
+        if summary:
+            self.summarized_memory['memory'] = summary 
+        else:
+            self.summarized_memory['memory'] = ''
     
     def update_memory(self, llm : ChatOpenAI ,new_activity: dict, summarize_past = 5):
         '''
