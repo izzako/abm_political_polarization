@@ -126,7 +126,7 @@ def main():
     end = data_end_datetime
     step = timedelta(minutes=srconst.minutes_step)
 
-    total = int((end - simulation_start) / step) + 1
+    total = int((end - simulation_start) / step)
 
     os.makedirs(EXPERIMENT_LOG_DIR,exist_ok=True)
     os.makedirs(EXPERIMENT_OUTPUT_DIR,exist_ok=True)
