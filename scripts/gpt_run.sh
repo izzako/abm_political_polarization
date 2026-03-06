@@ -32,13 +32,13 @@ echo "=========================================================="
 CONFIG="configs/gpt_config.ini"
 SIMULATE="true" # "false" or "true"
 
-module load cuda/12.2 gcc/12.2.0 python3/3.10.12
+module load gcc/12.2.0 python3/3.10.12 cuda/12.8
 
 set -a
 source .env
 set +a
 
-source /projectnb/llamagrp/izzan/env/bin/activate
+source "${ENV_PATH}/bin/activate"
 if [[ "$SIMULATE" == "true" ]]; then
     echo "Running synthetic simulation..."
     python -m simulation.synthetic_simulation_run -c "$CONFIG" --debug

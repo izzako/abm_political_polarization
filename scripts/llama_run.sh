@@ -24,7 +24,7 @@
 #$ -l gpus=1
 
 # Specify the minimum GPU compute capability. 
-#$ -l gpu_c=8.0
+#$ -l gpu_c=8.6
 
 # Keep track of information related to the current job
 echo "=========================================================="
@@ -41,13 +41,13 @@ SIMULATE="false" # "false" or "true"
 MODEL_SAFE=$(echo "$MODEL" | tr '[:upper:]/' '[:lower:]_' )
 LOG_DIR="logs/${MODEL_SAFE}"
 
-module load cuda/12.2 gcc/12.2.0 python3/3.10.12
+module load gcc/12.2.0 python3/3.10.12 cuda/12.8
 
 set -a
 source .env
 set +a
 
-source /projectnb/llamagrp/izzan/env/bin/activate
+source "${ENV_PATH}/bin/activate"
 hf auth login --token "$HF_TOKEN" --add-to-git-credential
 mkdir -p "$LOG_DIR"
 nohup vllm serve "$MODEL" \

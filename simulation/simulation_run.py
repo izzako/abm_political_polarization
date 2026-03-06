@@ -206,7 +206,7 @@ def main():
                 responses = [None]*summarize_batch  # or handle appropriately
             
             for agent, response in zip(agents, responses):
-                agent.initialize_synthetic(response.summary)
+                agent.initialize_synthetic(response.summary)  # type: ignore
                 agent.save_json(f'{EXPERIMENT_PERSONA_DIR}/{agent.name}.json')
 
             logger.info(f'Initiated {initiate_track}/{len(list_agents)} agents...')
