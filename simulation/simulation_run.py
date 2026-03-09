@@ -1,3 +1,6 @@
+import warnings
+warnings.filterwarnings("ignore", message=".*PydanticSerializationUnexpectedValue.*")
+
 from dotenv import load_dotenv
 load_dotenv()
 import numpy as np
@@ -34,6 +37,7 @@ def main():
 
     # SET PARSER
     parser = argparse.ArgumentParser()
+    parser.add_argument("--model", required=True)
     parser.add_argument("-c", "--config", required=True)
     parser.add_argument(
         "--debug",
@@ -56,7 +60,7 @@ def main():
     track_every = int(srconst.get('track_every','SIMULATION')) ## step (1 step = 15 minutes)
     topic_num = int(srconst.get('topic_num','SIMULATION'))
 
-    model_name = srconst.get('model_name','MODEL')
+    model_name = args.model
     temperature = float(srconst.get('temperature','MODEL'))
     inference_server_url = srconst.get('inference_server_url','MODEL')
     
@@ -76,25 +80,6 @@ def main():
         summarizer_llm = llm
         ctx = get_openai_callback()
         modelname = model_name.lower()
-
-    elif 'qwen' in model_name.lower():
-        llm = ChatOpenAI(
-            model=model_name,
-            openai_api_key="EMPTY",  # type: ignore
-            openai_api_base=inference_server_url, # type: ignore
-            max_retries=3,
-            timeout=60,
-            top_p = 0.8,
-            temperature= temperature,
-            extra_body={
-                "top_k": 20
-            },
-        )
-
-        summarizer_llm = llm
-        ctx=nullcontext()
-        modelname = model_name.lower().replace('/','_')
-
     else:
         llm = ChatOpenAI(
             model=model_name,
@@ -132,6 +117,14 @@ def main():
     os.makedirs(EXPERIMENT_OUTPUT_DIR,exist_ok=True)
     os.makedirs(EXPERIMENT_PERSONA_DIR,exist_ok=True)
 
+    print("="*30)
+    print("STARTING SIMULATION")
+    print("Model:",model_name)
+    print("Temperature:",temperature)
+    print("Topic Number:",topic_num)
+    print("Date range:",simulation_start,' - ', data_end_datetime)
+    print("="*30)
+
     logging.basicConfig(level=logging.INFO if not args.debug else logging.DEBUG,
                         format="[{asctime}] {levelname} {name} : {message}",
                         style="{",
@@ -142,6 +135,7 @@ def main():
 
     logger = logging.getLogger(__name__)
     logger.info(f"Set opinion classifier model: {model_name}")
+    logger.info(f"set topic number: {topic_num}")
     logger.info(f"Set output dir: {EXPERIMENT_OUTPUT_DIR}")
     logger.info(f"Set logging dir: {EXPERIMENT_LOG_DIR}")
     logger.info(f"Set persona dir: {EXPERIMENT_PERSONA_DIR}")

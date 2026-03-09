@@ -6,7 +6,7 @@
 # Specify hard time limit for the job. 
 #   The job will be aborted if it runs longer than this time.
 #   The default time is 12 hours
-#$ -l h_rt=24:00:00
+#$ -l h_rt=12:00:00
 
 # Send an email when the job finishes or if it is aborted (by default no email is sent).
 #$ -m ea
@@ -35,7 +35,7 @@ echo "Job ID : $JOB_ID"
 echo "=========================================================="
 
 MODEL="google/gemma-3-12b-it"
-CONFIG="configs/gemma_config.ini"
+CONFIG="configs/vllm_config.ini"
 SIMULATE="false" # "false" or "true"
 
 MODEL_SAFE=$(echo "$MODEL" | tr '[:upper:]/' '[:lower:]_' )
@@ -70,5 +70,5 @@ if [[ "$SIMULATE" == "true" ]]; then
     python -m simulation.synthetic_simulation_run -c "$CONFIG"
 else
     echo "Running simulation based on real data..."
-    python -m simulation.simulation_run -c "$CONFIG"
+    python -m simulation.simulation_run --model $MODEL -c "$CONFIG"
 fi
