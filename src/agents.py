@@ -1,3 +1,6 @@
+import warnings
+warnings.filterwarnings("ignore", message=".*PydanticSerializationUnexpectedValue.*")
+
 from .const import *
 from .utils import *
 
@@ -75,7 +78,7 @@ class Agent:
         Initialize agents initial opinion and memory
         '''
         ## Initialize opinion
-        self.opinion_weight = float(get('INIT_OPINION_NORMALIZATION','AGENTS'))*first_activity['source_weight']
+        self.opinion_weight = first_activity['source_weight'] #float(get('INIT_OPINION_NORMALIZATION','AGENTS'))*
 
         ## Initialize memory
         if first_activity['activity_type'] == 'reply':

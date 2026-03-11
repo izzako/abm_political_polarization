@@ -35,11 +35,13 @@ echo "Job ID : $JOB_ID"
 echo "=========================================================="
 
 MODEL="Qwen/Qwen3-8B-FP8"
+PORT=8000
 CONFIG="configs/vllm_config.ini"
 SIMULATE="false" # "false" or "true"
 
 MODEL_SAFE=$(echo "$MODEL" | tr '[:upper:]/' '[:lower:]_' )
 LOG_DIR="logs/${MODEL_SAFE}"
+SERVER_URL="http://localhost:${PORT}/v1"
 
 module load gcc/12.2.0 python3/3.10.12 cuda/12.8
 
@@ -53,12 +55,13 @@ mkdir -p "$LOG_DIR"
 nohup vllm serve "$MODEL" \
         --reasoning-parser deepseek_r1 \
         --tensor-parallel-size 1 \
+        --port $PORT \
         > "$LOG_DIR/vllm_$JOB_ID.log" 2>&1 &
 
 echo "Starting vLLM for $MODEL (logs in $LOG_DIR)..."
 
 # Wait loop
-until curl -s http://localhost:8000/v1/models | grep -q "id"; do
+until curl -s $SERVER_URL/models | grep -q "id"; do
     echo "Waiting for model to load... Retrying in 1 minute"
     sleep 60
 done
@@ -70,5 +73,7 @@ if [[ "$SIMULATE" == "true" ]]; then
     python -m simulation.synthetic_simulation_run -c "$CONFIG"
 else
     echo "Running simulation based on real data..."
-    python -m simulation.simulation_run --model $MODEL -c "$CONFIG"
+    python -m simulation.simulation_run --model $MODEL \
+                                        --server_url $SERVER_URL \
+                                        -c "$CONFIG"
 fi

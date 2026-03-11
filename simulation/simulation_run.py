@@ -1,5 +1,3 @@
-import warnings
-warnings.filterwarnings("ignore", message=".*PydanticSerializationUnexpectedValue.*")
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -38,6 +36,7 @@ def main():
     # SET PARSER
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", required=True)
+    parser.add_argument("--server_url", required=True)
     parser.add_argument("-c", "--config", required=True)
     parser.add_argument(
         "--debug",
@@ -62,7 +61,7 @@ def main():
 
     model_name = args.model
     temperature = float(srconst.get('temperature','MODEL'))
-    inference_server_url = srconst.get('inference_server_url','MODEL')
+    inference_server_url = args.server_url
     
 
     # INITIATE LLM AND OPINION CLASSIFIER
@@ -200,7 +199,10 @@ def main():
                 responses = [None]*summarize_batch  # or handle appropriately
             
             for agent, response in zip(agents, responses):
-                agent.initialize_synthetic(response.summary)  # type: ignore
+                if response:
+                    agent.initialize_synthetic(response.summary)  # type: ignore
+                else:
+                    agent.initialize_synthetic(response)
                 agent.save_json(f'{EXPERIMENT_PERSONA_DIR}/{agent.name}.json')
 
             logger.info(f'Initiated {initiate_track}/{len(list_agents)} agents...')

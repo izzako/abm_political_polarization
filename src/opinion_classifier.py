@@ -1,4 +1,6 @@
 # Opinion Classifier
+import warnings
+warnings.filterwarnings("ignore", message=".*PydanticSerializationUnexpectedValue.*")
 from typing import Union
 from .agents import Agent
 from pydantic import BaseModel, Field
