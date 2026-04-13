@@ -12,6 +12,14 @@ from pydantic import BaseModel, Field
 from langchain_core.prompts.prompt import PromptTemplate
 from langchain_openai import ChatOpenAI
 
+import warnings
+warnings.filterwarnings(
+    "ignore",
+    message=".*PydanticSerializationUnexpectedValue.*",
+    category=UserWarning
+)
+
+
 import logging
 logger = logging.getLogger(__name__)   # <--- IMPORTANT
 

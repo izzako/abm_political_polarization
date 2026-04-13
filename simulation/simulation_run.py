@@ -31,6 +31,14 @@ from src.opinion_classifier import OpinionClassifier
 import src.utils as srcutils
 import src.const as srconst
 
+import warnings
+warnings.filterwarnings(
+    "ignore",
+    message=".*PydanticSerializationUnexpectedValue.*",
+    category=UserWarning
+)
+
+
 def main():
 
     # SET PARSER
@@ -57,7 +65,11 @@ def main():
     data_start_datetime = datetime.strptime(srconst.get('data_start_datetime','SIMULATION'), '%Y-%m-%d %H:%M:%S')
     data_end_datetime = datetime.strptime(srconst.get('data_end_datetime','SIMULATION'), '%Y-%m-%d %H:%M:%S')
     track_every = int(srconst.get('track_every','SIMULATION')) ## step (1 step = 15 minutes)
-    topic_num = int(srconst.get('topic_num','SIMULATION'))
+    topic_num = srconst.get('topic_num','SIMULATION')
+    if topic_num !='all':
+        topic_num = int(topic_num)
+        topic_name = srconst.topics[topic_num]
+    else: topic_name = 'all'
 
     model_name = args.model
     temperature = float(srconst.get('temperature','MODEL'))
@@ -97,7 +109,9 @@ def main():
         ctx=nullcontext()
         modelname = model_name.lower().replace('/','_')
 
-    oc = OpinionClassifier(llm,srconst.topics[topic_num])
+    
+    
+    oc = OpinionClassifier(llm,topic_name)
 
     EXPERIMENT_OUTPUT_DIR = os.path.join(srconst.OUTPUT_DIR,modelname,str(topic_num))
     EXPERIMENT_LOG_DIR = os.path.join(srconst.LOG_DIR,modelname)
@@ -151,15 +165,18 @@ def main():
 
     # filter text with specific topics
 
-    
-    logger.info(f"Filter text with specific topics: {srconst.topics[topic_num]}")
+    logger.info(f"Filter text with specific topics: {topic_name}")
 
-    sim_text_data = text_data[text_data['topic_label']==srconst.topics[topic_num]].copy()
+    if topic_name != 'all':
+        sim_text_data = text_data[text_data['topic_label']==topic_name].copy()
 
-    # make sure referenced target text is available
-    sim_interaction_data = interaction_data[interaction_data['target_tweet_id'].isin(sim_text_data.index)].copy()
-    sim_interaction_data = sim_interaction_data[~((sim_interaction_data['interaction_type']=='reply')&
-                    ~(sim_interaction_data['source_tweet_id'].isin(sim_text_data.index)))].copy()
+        # make sure referenced target text is available
+        sim_interaction_data = interaction_data[interaction_data['target_tweet_id'].isin(sim_text_data.index)].copy()
+        sim_interaction_data = sim_interaction_data[~((sim_interaction_data['interaction_type']=='reply')&
+                        ~(sim_interaction_data['source_tweet_id'].isin(sim_text_data.index)))].copy()
+    else:
+        sim_text_data = text_data.copy()
+        sim_interaction_data = interaction_data.copy()
     
     #initialization for agents personality
     initialize_sim_text_data = sim_text_data[sim_text_data.datetime < simulation_start]

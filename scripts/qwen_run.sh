@@ -6,7 +6,7 @@
 # Specify hard time limit for the job. 
 #   The job will be aborted if it runs longer than this time.
 #   The default time is 12 hours
-#$ -l h_rt=12:00:00
+#$ -l h_rt=160:00:00
 
 # Send an email when the job finishes or if it is aborted (by default no email is sent).
 #$ -m ea
@@ -20,8 +20,8 @@
 # Request 4 core
 #$ -pe omp 4
 
-# Request 1 GPU 
-#$ -l gpus=1
+# Request 2 GPU 
+#$ -l gpus=2
 
 # Specify the minimum GPU compute capability. 
 #$ -l gpu_c=8.6
@@ -54,7 +54,11 @@ hf auth login --token "$HF_TOKEN" --add-to-git-credential
 mkdir -p "$LOG_DIR"
 nohup vllm serve "$MODEL" \
         --reasoning-parser deepseek_r1 \
-        --tensor-parallel-size 1 \
+        --tensor-parallel-size 2 \
+        --kv-cache-dtype fp8 \
+        --enable-chunked-prefill \
+        --max-num-batched-tokens 8192 \
+        --max-num-seqs 256 \
         --port $PORT \
         > "$LOG_DIR/vllm_$JOB_ID.log" 2>&1 &
 

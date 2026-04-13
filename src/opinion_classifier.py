@@ -1,6 +1,5 @@
 # Opinion Classifier
-import warnings
-warnings.filterwarnings("ignore", message=".*PydanticSerializationUnexpectedValue.*")
+
 from typing import Union
 from .agents import Agent
 from pydantic import BaseModel, Field
@@ -12,6 +11,13 @@ from tqdm import tqdm
 
 import logging
 logger = logging.getLogger(__name__)   # <--- IMPORTANT
+
+import warnings
+warnings.filterwarnings(
+    "ignore",
+    message=".*PydanticSerializationUnexpectedValue.*",
+    category=UserWarning
+)
 
 
 # Define structured output schema for multiple tweets at once
