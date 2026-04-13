@@ -33,7 +33,9 @@ def main():
     text_df = pd.read_parquet(srconst.get('text_data','DATA_PATH'))
     interaction_df = pd.read_parquet(srconst.get('interaction_data','DATA_PATH'))
 
-    topic_num = int(srconst.get('topic_num','SIMULATION'))
+    topic_num = srconst.get('topic_num','SIMULATION')
+    if topic_num != 'all':
+        topic_num = int(topic_num)
     init_days = int(srconst.get('init_days','SIMULATION'))
 
     # PARAMS

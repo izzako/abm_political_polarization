@@ -213,4 +213,5 @@ persona/
 outputs/
 outputs_*/
 logs/
+data/ground_truth/
 abm_*.o*
