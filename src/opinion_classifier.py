@@ -52,7 +52,8 @@ class OpinionClassifier:
                                     followers_count = agent.traits['followers_count'],
                                     following_count = agent.traits['following_count'],
                                     current_opinion_weight = agent.opinion_weight,
-                                    memories = agent.summarized_memory['memory'] if agent.summarized_memory['memory'] else agent.memory, #take the latest three memory
+                                    summarized_memory = agent.summarized_memory['memory'] if agent.summarized_memory['memory'] else agent.memory[-1:],
+                                    memories = agent.memory[-5:], #take the latest five memory
                                     activity_content = new_activity['memory']
                                 )
 
@@ -60,44 +61,25 @@ class OpinionClassifier:
         results = self.structured_llm.invoke(prompt)
         return results.reasoning, results.delta_opinion # type: ignore
     
-    def batch_classify(self, list_of_agent: list[Agent], list_of_new_activity: list[dict], batch_size: int = 5):
-        def chunks(iterable, size):
-            it = iter(iterable)
-            while True:
-                batch = list(islice(it, size))
-                if not batch:
-                    break
-                yield batch
+    def batch_classify(self, list_of_agent: list[Agent], list_of_new_activity: list[dict], max_concurrency: int = 50):
+        
+        inputs = [
+            self.template.format(
+                topic=self.topic,
+                gender=agent.traits["gender"],
+                followers_count=agent.traits["followers_count"],
+                following_count=agent.traits["following_count"],
+                current_opinion_weight=agent.opinion_weight,
+                summarized_memory=agent.summarized_memory['memory'] if agent.summarized_memory['memory'] else agent.memory[-1:],
+                memories=agent.memory[-5:],
+                activity_content=new_activity["memory"],
+            )
+            for agent, new_activity in zip(list_of_agent, list_of_new_activity)
+        ]
 
-        batch_reasoning_all = []
-        batch_delta_all = []
-
-        for i, (agent_batch, activity_batch) in enumerate(
-                tqdm(zip(chunks(list_of_agent, batch_size), chunks(list_of_new_activity, batch_size)),
-                    total=len(list_of_agent) // batch_size + 1,
-                    leave=False,
-                    desc="Running batch classification")
-            ):
-            inputs = [
-                self.template.format(
-                    topic = self.topic,
-                    gender=agent.traits["gender"],
-                    followers_count=agent.traits["followers_count"],
-                    following_count=agent.traits["following_count"],
-                    current_opinion_weight=agent.opinion_weight,
-                    memories= agent.summarized_memory['memory'] if agent.summarized_memory['memory'] else agent.memory,
-                    activity_content= new_activity["memory"], # type: ignore
-                )
-                for agent, new_activity in zip(agent_batch, activity_batch)
-            ]
-
-            try:
-                results = self.structured_llm.batch(inputs, config={"max_concurrency": 5}) # type: ignore
-                batch_reasoning_all.extend([r.reasoning for r in results]) # type: ignore
-                batch_delta_all.extend([r.delta_opinion for r in results]) # type: ignore
-            except Exception as e:
-                logger.error(f"Batch Error: {e}")
-                batch_reasoning_all.extend([None] * len(agent_batch))
-                batch_delta_all.extend([0] * len(agent_batch))
-
-        return batch_reasoning_all, batch_delta_all
+        try:
+            results = self.structured_llm.batch(inputs, config={"max_concurrency": max_concurrency})
+            return [r.reasoning for r in results], [r.delta_opinion for r in results]
+        except Exception as e:
+            logger.error(f"Batch Error: {e}")
+            return [None] * len(inputs), [0.0] * len(inputs)

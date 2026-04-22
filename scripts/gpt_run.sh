@@ -29,8 +29,11 @@ echo "WORKING DIR: $TMPDIR"
 echo "Job ID : $JOB_ID"
 echo "=========================================================="
 
+
+MODEL="gpt-5-nano"
 CONFIG="configs/gpt_config.ini"
-SIMULATE="true" # "false" or "true"
+SIMULATE="false" # "false" or "true"
+SERVER_URL="https://api.openai.com/v1/chat/completions"
 
 module load gcc/12.2.0 python3/3.10.12 cuda/12.8
 
@@ -39,10 +42,11 @@ source .env
 set +a
 
 source "${ENV_PATH}/bin/activate"
+
 if [[ "$SIMULATE" == "true" ]]; then
     echo "Running synthetic simulation..."
     python -m simulation.synthetic_simulation_run -c "$CONFIG" --debug
 else
     echo "Running simulation based on real data..."
-    python -m simulation.simulation_run -c "$CONFIG" --debug
+    python -m simulation.simulation_run --model $MODEL --server_url $SERVER_URL -c "$CONFIG"
 fi
