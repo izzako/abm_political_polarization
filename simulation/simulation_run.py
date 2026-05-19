@@ -187,53 +187,91 @@ def main():
     sim_interaction_data['source_author'].to_list() + # type: ignore
     sim_interaction_data['target_author'].to_list())))# type: ignore
 
-    # INITATE AGENTS
+    # # INITATE AGENTS
 
-    summarize_batch = 5
-    initiate_track = 0
+    # summarize_batch = 5
+    # initiate_track = 0
     
+    # with ctx as cb:
+    #     logger.info(f"Initate agents data...")
+    #     # INITATE AGENTS
+    #     for batch in tqdm(srcutils.chunk_list(list_agents, summarize_batch), desc=f"Initialize agents with batch {summarize_batch}"):
+    #         batch_inputs = []
+    #         agents = []
+    #         initiate_track += len(batch)
+    #         for user in batch:
+    #             activities = srcutils._get_all_activity(initialize_sim_text_data, initialize_sim_interaction_data, user)
+    #             agent = Agent(author_data[author_data['author'] == user].iloc[0].to_dict())
+    #             agents.append(agent)
+    #             batch_inputs.append(agent.prep_init_synthetic(activities))
+            
+    #         # Batch call
+    #         try:
+    #             if batch_inputs:
+    #                 responses = summarizer_llm.with_structured_output(MemorySummarySchema).batch(batch_inputs) # type: ignore
+    #             else:
+    #                 responses = [None]*summarize_batch  # or handle appropriately
+    #         except Exception as e:
+    #             logger.error(f"Batch call failed: {e}")
+    #             responses = [None]*summarize_batch  # or handle appropriately
+            
+    #         for agent, response in zip(agents, responses):
+    #             if response:
+    #                 agent.initialize_synthetic(response.summary)  # type: ignore
+    #             else:
+    #                 agent.initialize_synthetic(response)
+    #             agent.save_json(f'{EXPERIMENT_PERSONA_DIR}/{agent.name}.json')
+
+    #         logger.info(f'Initiated {initiate_track}/{len(list_agents)} agents...')
+    #         if 'gpt' in modelname:
+    #             openai_usage ={
+    #                 "Compound Num. of Agents":initiate_track,
+    #                 "Total Tokens": cb.total_tokens, # type: ignore
+    #                 "Prompt Tokens": cb.prompt_tokens, # type: ignore
+    #                 "Completion Tokens": cb.completion_tokens, # type: ignore
+    #                 "Total Cost (USD)": f"${cb.total_cost:.4f}" # type: ignore
+    #                 }
+    #             with open(os.path.join(EXPERIMENT_LOG_DIR,f'{srcutils.today_str}_{topic_num}_agent_initiate_openai_usage.log'),'a') as f:
+    #                 f.write(json.dumps(openai_usage, indent=4 ,ensure_ascii=False) + "\n")
+    # INITIATE AGENTS
     with ctx as cb:
-        logger.info(f"Initate agents data...")
-        # INITATE AGENTS
-        for batch in tqdm(srcutils.chunk_list(list_agents, summarize_batch), desc=f"Initialize agents with batch {summarize_batch}"):
-            batch_inputs = []
-            agents = []
-            initiate_track += len(batch)
-            for user in batch:
-                activities = srcutils._get_all_activity(initialize_sim_text_data, initialize_sim_interaction_data, user)
-                agent = Agent(author_data[author_data['author'] == user].iloc[0].to_dict())
-                agents.append(agent)
-                batch_inputs.append(agent.prep_init_synthetic(activities))
-            
-            # Batch call
-            try:
-                if batch_inputs:
-                    responses = summarizer_llm.with_structured_output(MemorySummarySchema).batch(batch_inputs) # type: ignore
-                else:
-                    responses = [None]*summarize_batch  # or handle appropriately
-            except Exception as e:
-                logger.error(f"Batch call failed: {e}")
-                responses = [None]*summarize_batch  # or handle appropriately
-            
-            for agent, response in zip(agents, responses):
-                if response:
-                    agent.initialize_synthetic(response.summary)  # type: ignore
-                else:
-                    agent.initialize_synthetic(response)
-                agent.save_json(f'{EXPERIMENT_PERSONA_DIR}/{agent.name}.json')
+        logger.info("Initiating agents data...")
 
-            logger.info(f'Initiated {initiate_track}/{len(list_agents)} agents...')
-            if 'gpt' in modelname:
-                openai_usage ={
-                    "Compound Num. of Agents":initiate_track,
-                    "Total Tokens": cb.total_tokens, # type: ignore
-                    "Prompt Tokens": cb.prompt_tokens, # type: ignore
-                    "Completion Tokens": cb.completion_tokens, # type: ignore
-                    "Total Cost (USD)": f"${cb.total_cost:.4f}" # type: ignore
-                    }
-                with open(os.path.join(EXPERIMENT_LOG_DIR,f'{srcutils.today_str}_{topic_num}_agent_initiate_openai_usage.log'),'a') as f:
-                    f.write(json.dumps(openai_usage, indent=4 ,ensure_ascii=False) + "\n")
+        # Build all agents and inputs in one pass
+        agents = []
+        batch_inputs = []
+        for user in tqdm(list_agents, desc="Preparing agent inputs"):
+            activities = srcutils._get_all_activity(initialize_sim_text_data, initialize_sim_interaction_data, user)
+            agent = Agent(author_data[author_data['author'] == user].iloc[0].to_dict())
+            agents.append(agent)
+            batch_inputs.append(agent.prep_init_synthetic(activities))
 
+        # Single batch call
+        try:
+            responses = summarizer_llm.with_structured_output(MemorySummarySchema).batch(
+                batch_inputs, config={"max_concurrency": 50}
+            )
+        except Exception as e:
+            logger.error(f"Batch call failed: {e}")
+            responses = [None] * len(batch_inputs)
+
+        # Post-process all results
+        for agent, response in zip(agents, responses):
+            agent.initialize_synthetic(response.summary if response else None)
+            agent.save_json(f'{EXPERIMENT_PERSONA_DIR}/{agent.name}.json')
+
+        logger.info(f'Initiated {len(agents)}/{len(list_agents)} agents...')
+
+        if 'gpt' in modelname:
+            openai_usage = {
+                "Compound Num. of Agents": len(agents),
+                "Total Tokens": cb.total_tokens,
+                "Prompt Tokens": cb.prompt_tokens,
+                "Completion Tokens": cb.completion_tokens,
+                "Total Cost (USD)": f"${cb.total_cost:.4f}"
+            }
+            with open(os.path.join(EXPERIMENT_LOG_DIR, f'{srcutils.today_str}_{topic_num}_agent_initiate_openai_usage.log'), 'a') as f:
+                f.write(json.dumps(openai_usage, indent=4, ensure_ascii=False) + "\n")
 
         # INITIATE TRACKER
 

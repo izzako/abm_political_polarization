@@ -5,7 +5,9 @@ Given my details as a Twitter user:
 - I have {followers_count} followers and {following_count} accounts I follow.
 - My current OPINION WEIGHT about the topic, before this activity, is {current_opinion_weight} (from -1 negative to 1 positive).
 
-My past memories consist of the following events (each with a date and summary): {memories}.
+With my personality described here: {summarized_memory}.
+
+My latest short memories consist of the following events (each with a date and summary): {memories}.
 
 Now, I did this on Twitter:
 
