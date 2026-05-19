@@ -17,7 +17,7 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import numpy as np
 import src.const as srconst
-
+from datetime import datetime,timedelta
 
 
 def main():
@@ -36,6 +36,8 @@ def main():
     topic_num = srconst.get('topic_num','SIMULATION')
     if topic_num != 'all':
         topic_num = int(topic_num)
+    
+    start = datetime.strptime('2024-02-01 00:00:00', '%Y-%m-%d %H:%M:%S')
     init_days = int(srconst.get('init_days','SIMULATION'))
 
     # PARAMS
@@ -54,21 +56,10 @@ def main():
     retweet_weights = float(srconst.get('interaction_retweet_weights','MODEL'))
 
     mode =  srconst.get('model','MODEL') #'Friedkin-Johnsen' #or mode = 'DeGroot'
-    # tolerance = float(srconst.get('tolerance','MODEL'))
 
     EXPERIMENT_OUTPUT_DIR = os.path.join(srconst.OUTPUT_DIR,'heuristic_'+mode,f'{topic_num}')
-    # EXPERIMENT_LOG_DIR = os.path.join(srconst.LOG_DIR,'heuristic_'+mode)
 
     os.makedirs(EXPERIMENT_OUTPUT_DIR, exist_ok=True)
-    # os.makedirs(EXPERIMENT_LOG_DIR, exist_ok=True)
-
-    # logging.basicConfig(level=logging.INFO,
-    #                     format="[{asctime}] {levelname} {name} : {message}",
-    #                     style="{",
-    #                     datefmt="%Y-%m-%d %H:%M:%S",
-    #                     filename=os.path.join(EXPERIMENT_LOG_DIR,f"{srconst.today_str}_{topic_num}_simulation_{mode}.log"),
-    #                     encoding="utf-8",
-    #                     filemode="w")
 
     # filter text with specific topics
     if topic_num == 'all':
@@ -89,17 +80,19 @@ def main():
     sim_interaction_data['source_author'].to_list() + # type: ignore
     sim_interaction_data['target_author'].to_list())))# type: ignore
 
+    simulation_start = start + pd.Timedelta(days=init_days)
+    initialize_sim_interaction_data = sim_interaction_data[sim_interaction_data.datetime < simulation_start]
     # build matrix
 
     W = np.identity(len(list_agents))
     user_to_idx = {user: i for i, user in enumerate(list_agents)}
 
 
-    interaction_rep = sim_interaction_data.loc[sim_interaction_data.interaction_type=='reply'].merge(# type: ignore
+    interaction_rep = initialize_sim_interaction_data.loc[initialize_sim_interaction_data.interaction_type=='reply'].merge(# type: ignore
         sim_text_data[['tweet_id','sentiment_label']],left_on='source_tweet_id',right_on='tweet_id').drop(# type: ignore
             ['tweet_id'],axis=1)[['source_author','target_author','sentiment_label']]
 
-    interaction_rt = sim_interaction_data.loc[sim_interaction_data.interaction_type=='retweet',['source_author','target_author']]# type: ignore
+    interaction_rt = initialize_sim_interaction_data.loc[initialize_sim_interaction_data.interaction_type=='retweet',['source_author','target_author']]# type: ignore
 
     interaction_rep['weight'] = interaction_rep['sentiment_label'].map(reply_weights)
     interaction_rt['weight'] =retweet_weights
@@ -124,8 +117,9 @@ def main():
     # Initialize Weight
     X0 = initialize_opinions_with_retweets(sim_text_data, sim_interaction_data, user_to_idx, init_days)
 
+    end_date = '2024-02-28'
     date_0 = pd.Timestamp(f'2024-02-{str(init_days).zfill(2)} 21:36:00')
-    x_date = pd.date_range((date_0+pd.Timedelta(days=1)).date(),'2024-02-28',freq='2.4h')
+    x_date = pd.date_range((date_0+pd.Timedelta(days=1)).date(),end_date,freq='2.4h') #ganti ini lagi ke tgl 28
     step = len(x_date)
     hist_X = [X0]
     Alpha = np.identity(len(list_agents))-Lambda

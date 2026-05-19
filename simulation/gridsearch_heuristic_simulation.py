@@ -35,7 +35,7 @@ def main():
 
     
     # loop
-    for topic in ['0','1','2','3','4','all']:
+    for topic in ['all','0','1','2','3','4']:
         gridsearch_df = []
         print('topic:',topic)
         config['SIMULATION'] = {
@@ -84,7 +84,7 @@ def main():
                                 ground_df = ground_df.sort_values(['date','agent'],ignore_index=True).copy()
                                 
                                 linew = []
-                                for date in range(6,28):
+                                for date in range(6,9):
                                     temp_date = '2024-02-'+str(date+1).zfill(2)
                                     A = ground_df.loc[pd.to_datetime(ground_df['date'])==temp_date,'opinion_weight']
                                     B = df_model2.loc[pd.to_datetime(df_model2['date'])==temp_date,'opinion_weight']
