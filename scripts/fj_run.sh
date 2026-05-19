@@ -1,12 +1,16 @@
 #!/bin/bash -l
 
-CONFIG="configs/fj_model_config.ini"
-
 set -a
 source .env
 set +a
 
 source venv/bin/activate
-
 echo "Running heuristic simulation..."
-python -m simulation.heuristic_simulation -c "$CONFIG"
+
+for TOPIC in all $(seq 0 4); do
+    echo "Running with topic ${TOPIC}"
+
+    CONFIG="configs/fj_model_config_${TOPIC}.ini"
+
+    python -m simulation.heuristic_simulation -c "$CONFIG"
+done

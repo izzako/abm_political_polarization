@@ -21,6 +21,7 @@ Provide a brief, first-person explanation (1 sentence) of why my opinion would s
 Output a float number ("delta_opinion"), ranging from -1 (strong negative shift) to 0 (no change) to 1 (strong positive shift), representing the relative change in my opinion after this activity.
 
 Constraints:
+
 - Output MUST be valid JSON.
 - No markdown formatting.
 - No additional fields.
