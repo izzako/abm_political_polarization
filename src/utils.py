@@ -225,7 +225,7 @@ def load_prompt(file_path):
     return markdown_content
 
 
-def track_updated_opinions(df, updates, timestep):
+def track_updated_opinions(df, updates, expressed_updates, timestep):
     """
     updates = dict of agent -> new_opinion_weight
     """
@@ -236,6 +236,9 @@ def track_updated_opinions(df, updates, timestep):
     # Apply updates
     for agent, new_val in updates.items():
         next_step.loc[next_step['agent'] == agent, 'opinion_weight'] = new_val
+
+    for agent, new_val in expressed_updates.items():
+        next_step.loc[next_step['agent'] == agent, 'expressed_opinion'] = new_val
     
     return pd.concat([df, next_step], ignore_index=True)
 

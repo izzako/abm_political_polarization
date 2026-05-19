@@ -165,11 +165,11 @@ class Agent:
             new_activity
         )
         
-        if (len(self.memory) >= summarize_past) and (len(self.memory) % summarize_past==0):
+        if (len(self.memory) >= (summarize_past + self.summarized_memory['recency'])):
             # summarize memory
             structured_llm = llm.with_structured_output(MemorySummarySchema)
             summarize_template = build_summarize_template()
-            prompt = summarize_template.format(memories=self.memory[(-1*summarize_past):])
+            prompt = summarize_template.format(memories=self.memory[(-1*summarize_past*2):])
             try:
                 results = structured_llm.invoke(prompt)
                 self.summarized_memory['memory'] = results.summary # type: ignore

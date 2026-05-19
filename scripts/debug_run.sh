@@ -6,13 +6,13 @@
 # Specify hard time limit for the job. 
 #   The job will be aborted if it runs longer than this time.
 #   The default time is 12 hours
-#$ -l h_rt=60:00:00
+#$ -l h_rt=12:00:00
 
 # Send an email when the job finishes or if it is aborted (by default no email is sent).
 #$ -m ea
 
 # Give job a name
-#$ -N abm_pp_qwen3
+#$ -N abm_pp_debug
 
 # Combine output and error files into a single file
 #$ -j y
@@ -40,7 +40,7 @@ CONFIG="configs/vllm_config.ini"
 SIMULATE="false" # "false" or "true"
 
 MODEL_SAFE=$(echo "$MODEL" | tr '[:upper:]/' '[:lower:]_' )
-LOG_DIR="logs/${MODEL_SAFE}"
+LOG_DIR="logs/${MODEL_SAFE}_debug"
 SERVER_URL="http://localhost:${PORT}/v1"
 
 module load gcc/12.2.0 python3/3.10.12 cuda/12.8
@@ -79,5 +79,6 @@ else
     echo "Running simulation based on real data..."
     python -m simulation.simulation_run --model $MODEL \
                                         --server_url $SERVER_URL \
-                                        -c "$CONFIG"
+                                        -c "$CONFIG"\
+                                        --debug
 fi

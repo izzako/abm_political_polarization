@@ -113,9 +113,14 @@ def main():
     
     oc = OpinionClassifier(llm,topic_name)
 
-    EXPERIMENT_OUTPUT_DIR = os.path.join(srconst.OUTPUT_DIR,modelname,str(topic_num))
-    EXPERIMENT_LOG_DIR = os.path.join(srconst.LOG_DIR,modelname)
-    EXPERIMENT_PERSONA_DIR = os.path.join(srconst.PERSONA_DIR,modelname,str(topic_num))
+    if not args.debug:
+        EXPERIMENT_OUTPUT_DIR = os.path.join(srconst.OUTPUT_DIR,modelname,str(topic_num))
+        EXPERIMENT_LOG_DIR = os.path.join(srconst.LOG_DIR,modelname)
+        EXPERIMENT_PERSONA_DIR = os.path.join(srconst.PERSONA_DIR,modelname,str(topic_num))
+    else:
+        EXPERIMENT_OUTPUT_DIR = os.path.join(srconst.OUTPUT_DIR,modelname+'_debug',str(topic_num))
+        EXPERIMENT_LOG_DIR = os.path.join(srconst.LOG_DIR,modelname+'_debug')
+        EXPERIMENT_PERSONA_DIR = os.path.join(srconst.PERSONA_DIR,modelname+'_debug',str(topic_num))        
 
     # date
     init_time_personality = int(srconst.get('timeframe_init','SIMULATION')) #days
@@ -187,91 +192,55 @@ def main():
     sim_interaction_data['source_author'].to_list() + # type: ignore
     sim_interaction_data['target_author'].to_list())))# type: ignore
 
-    # # INITATE AGENTS
+    # INITATE AGENTS
 
-    # summarize_batch = 5
-    # initiate_track = 0
+    summarize_batch = 30
+    initiate_track = 0
+    max_concurrency = 25
     
-    # with ctx as cb:
-    #     logger.info(f"Initate agents data...")
-    #     # INITATE AGENTS
-    #     for batch in tqdm(srcutils.chunk_list(list_agents, summarize_batch), desc=f"Initialize agents with batch {summarize_batch}"):
-    #         batch_inputs = []
-    #         agents = []
-    #         initiate_track += len(batch)
-    #         for user in batch:
-    #             activities = srcutils._get_all_activity(initialize_sim_text_data, initialize_sim_interaction_data, user)
-    #             agent = Agent(author_data[author_data['author'] == user].iloc[0].to_dict())
-    #             agents.append(agent)
-    #             batch_inputs.append(agent.prep_init_synthetic(activities))
-            
-    #         # Batch call
-    #         try:
-    #             if batch_inputs:
-    #                 responses = summarizer_llm.with_structured_output(MemorySummarySchema).batch(batch_inputs) # type: ignore
-    #             else:
-    #                 responses = [None]*summarize_batch  # or handle appropriately
-    #         except Exception as e:
-    #             logger.error(f"Batch call failed: {e}")
-    #             responses = [None]*summarize_batch  # or handle appropriately
-            
-    #         for agent, response in zip(agents, responses):
-    #             if response:
-    #                 agent.initialize_synthetic(response.summary)  # type: ignore
-    #             else:
-    #                 agent.initialize_synthetic(response)
-    #             agent.save_json(f'{EXPERIMENT_PERSONA_DIR}/{agent.name}.json')
-
-    #         logger.info(f'Initiated {initiate_track}/{len(list_agents)} agents...')
-    #         if 'gpt' in modelname:
-    #             openai_usage ={
-    #                 "Compound Num. of Agents":initiate_track,
-    #                 "Total Tokens": cb.total_tokens, # type: ignore
-    #                 "Prompt Tokens": cb.prompt_tokens, # type: ignore
-    #                 "Completion Tokens": cb.completion_tokens, # type: ignore
-    #                 "Total Cost (USD)": f"${cb.total_cost:.4f}" # type: ignore
-    #                 }
-    #             with open(os.path.join(EXPERIMENT_LOG_DIR,f'{srcutils.today_str}_{topic_num}_agent_initiate_openai_usage.log'),'a') as f:
-    #                 f.write(json.dumps(openai_usage, indent=4 ,ensure_ascii=False) + "\n")
-    # INITIATE AGENTS
     with ctx as cb:
-        logger.info("Initiating agents data...")
+        logger.info(f"Initate agents data...")
+        # INITATE AGENTS
+        for batch in tqdm(srcutils.chunk_list(list_agents, summarize_batch), desc=f"Initialize agents with batch {summarize_batch}"):
+            batch_inputs = []
+            agents = []
+            initiate_track += len(batch)
+            for user in batch:
+                activities = srcutils._get_all_activity(initialize_sim_text_data, initialize_sim_interaction_data, user)
+                agent = Agent(author_data[author_data['author'] == user].iloc[0].to_dict())
+                agents.append(agent)
+                batch_inputs.append(agent.prep_init_synthetic(activities))
+            
+            # Batch call
+            try:
+                if batch_inputs and not args.debug:
+                    responses = summarizer_llm.with_structured_output(MemorySummarySchema).batch(batch_inputs,
+                    config={"max_concurrency": max_concurrency}) # type: ignore
+                else:
+                    responses = [None]*summarize_batch
+            except Exception as e:
+                logger.error(f"Batch call failed: {e}")
+                responses = [None]*summarize_batch
+            
+            for agent, response in zip(agents, responses):
+                if response:
+                    agent.initialize_synthetic(response.summary)  # type: ignore
+                else:
+                    agent.initialize_synthetic(response)
+                agent.save_json(f'{EXPERIMENT_PERSONA_DIR}/{agent.name}.json')
 
-        # Build all agents and inputs in one pass
-        agents = []
-        batch_inputs = []
-        for user in tqdm(list_agents, desc="Preparing agent inputs"):
-            activities = srcutils._get_all_activity(initialize_sim_text_data, initialize_sim_interaction_data, user)
-            agent = Agent(author_data[author_data['author'] == user].iloc[0].to_dict())
-            agents.append(agent)
-            batch_inputs.append(agent.prep_init_synthetic(activities))
-
-        # Single batch call
-        try:
-            responses = summarizer_llm.with_structured_output(MemorySummarySchema).batch(
-                batch_inputs, config={"max_concurrency": 50}
-            )
-        except Exception as e:
-            logger.error(f"Batch call failed: {e}")
-            responses = [None] * len(batch_inputs)
-
-        # Post-process all results
-        for agent, response in zip(agents, responses):
-            agent.initialize_synthetic(response.summary if response else None)
-            agent.save_json(f'{EXPERIMENT_PERSONA_DIR}/{agent.name}.json')
-
-        logger.info(f'Initiated {len(agents)}/{len(list_agents)} agents...')
-
-        if 'gpt' in modelname:
-            openai_usage = {
-                "Compound Num. of Agents": len(agents),
-                "Total Tokens": cb.total_tokens,
-                "Prompt Tokens": cb.prompt_tokens,
-                "Completion Tokens": cb.completion_tokens,
-                "Total Cost (USD)": f"${cb.total_cost:.4f}"
-            }
-            with open(os.path.join(EXPERIMENT_LOG_DIR, f'{srcutils.today_str}_{topic_num}_agent_initiate_openai_usage.log'), 'a') as f:
-                f.write(json.dumps(openai_usage, indent=4, ensure_ascii=False) + "\n")
+            logger.info(f'Initiated {initiate_track}/{len(list_agents)} agents...')
+            if 'gpt' in modelname:
+                openai_usage ={
+                    "Compound Num. of Agents":initiate_track,
+                    "Total Tokens": cb.total_tokens, # type: ignore
+                    "Prompt Tokens": cb.prompt_tokens, # type: ignore
+                    "Completion Tokens": cb.completion_tokens, # type: ignore
+                    "Total Cost (USD)": f"${cb.total_cost:.4f}" # type: ignore
+                    }
+                with open(os.path.join(EXPERIMENT_LOG_DIR,f'{srcutils.today_str}_{topic_num}_agent_initiate_openai_usage.log'),'a') as f:
+                    f.write(json.dumps(openai_usage, indent=4 ,ensure_ascii=False) + "\n")
+    
 
         # INITIATE TRACKER
 
@@ -280,7 +249,8 @@ def main():
         opinion_shift_dict = {
             'time_step':[],
             'agent':[],
-            'opinion_weight':[]
+            'opinion_weight':[],
+            'expressed_opinion':[]
         }
 
         for user in tqdm(list_agents,desc='Adding agents weight to tracker'):
@@ -288,6 +258,7 @@ def main():
             agent = Agent.from_json(f"{EXPERIMENT_PERSONA_DIR}/{user}.json")
             opinion_shift_dict['agent'].append(agent.name)
             opinion_shift_dict['opinion_weight'].append(agent.opinion_weight)
+            opinion_shift_dict['expressed_opinion'].append(agent.opinion_weight)
 
 
         opinion_shift_df = pd.DataFrame(opinion_shift_dict)
@@ -318,6 +289,7 @@ def main():
                 for i,row in enumerate(step_text_data.itertuples()): #original posts
                     agent = Agent.from_json(f"{EXPERIMENT_PERSONA_DIR}/{row.author}.json")
                     new_activity = {'datetime':row.datetime.strftime('%Y-%m-%d %H:%M:%S'), # type: ignore
+                                'type': 'original',
                                 'memory': srcutils.create_original_memory(row.text,
                                                         row.likes_count,
                                                         row.reposts_count)
@@ -331,6 +303,7 @@ def main():
                     agent = Agent.from_json(f"{EXPERIMENT_PERSONA_DIR}/{row.source_author}.json")
                     if row.interaction_type =='reply': #replies
                         new_activity = {'datetime':row.datetime.strftime('%Y-%m-%d %H:%M:%S'), # type: ignore
+                                    'type': 'reply',
                                     'memory': srcutils. create_reply_memory_without_weight(
                                                                 sim_text_data.loc[row.source_tweet_id,'text'], # type: ignore
                                                                 sim_text_data.loc[row.target_tweet_id,'text'] # type: ignore
@@ -338,6 +311,7 @@ def main():
                                     }
                     elif row.interaction_type =='retweet': #retweet
                         new_activity = {'datetime':row.datetime.strftime('%Y-%m-%d %H:%M:%S'), # type: ignore
+                                    'type': 'retweet',
                                     'memory': srcutils.create_retweet_memory(
                                                 sim_text_data.loc[row.target_tweet_id,'text'] # type: ignore
                                     )}
@@ -347,7 +321,7 @@ def main():
             if len(batch_new_activity)>0:
                 # opinion classifier
                 invoke_start = time.time()
-                batch_reasoning, batch_delta = oc.batch_classify(
+                batch_reasoning, batch_expressed, batch_delta = oc.batch_classify(
                     list_of_agent=batch_agents,
                     list_of_new_activity=batch_new_activity
                 )
@@ -356,7 +330,10 @@ def main():
                 
                 # save
                 weight_updates = {}
-                for agent, new_activity,reasoning, delta_opinion in zip(batch_agents,batch_new_activity,batch_reasoning,batch_delta):
+                expressed_updates = {}
+                for agent, new_activity,reasoning, expressed, delta_opinion in zip(batch_agents,batch_new_activity,
+                                                                                   batch_reasoning,batch_expressed,
+                                                                                   batch_delta):
                     if reasoning:
                         new_activity['memory'] += '\n'+reasoning
                     else:
@@ -365,20 +342,20 @@ def main():
                     agent.update_opinion_weight(delta_opinion)
                     agent.save_json(f'{EXPERIMENT_PERSONA_DIR}/{agent.name}.json')
                     weight_updates[agent.name]=agent.opinion_weight
-                opinion_shift_df = srcutils.track_updated_opinions(opinion_shift_df,weight_updates,time_step)
+                    expressed_updates[agent.name]=expressed
+                opinion_shift_df = srcutils.track_updated_opinions(opinion_shift_df,weight_updates,expressed_updates,time_step)
                 
             else: 
                 weight_updates={}
-                opinion_shift_df = srcutils.track_updated_opinions(opinion_shift_df,weight_updates,time_step)
+                expressed_updates = {}
+                opinion_shift_df = srcutils.track_updated_opinions(opinion_shift_df,weight_updates,expressed_updates,time_step)
             
             # save periodically
             if k % track_every == 0:
                 logger.info(f"{k}/{total} steps, Invoke time: {invoke_time}s, current weight updated: {weight_updates}")
                 opinion_shift_df.to_csv(os.path.join(EXPERIMENT_OUTPUT_DIR,f'opinion_shift_step_{k}_{total}.csv'),
                                             index=False,
-                                            sep=';')
-                
-
+                                            sep=';')                
                 if 'gpt' in modelname:
                     openai_usage = {
                         'step': k,
