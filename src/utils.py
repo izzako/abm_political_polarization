@@ -117,7 +117,7 @@ def _get_all_activity(text_data, interaction_data, author_id):
         ['datetime', 'target_tweet_id', 'target_author']
     ].merge(
         text_data.reset_index()[['tweet_id', 'sentiment_label', 'text']],
-        how='left',
+        how='inner',
         left_on='target_tweet_id',
         right_on='tweet_id'
     )
