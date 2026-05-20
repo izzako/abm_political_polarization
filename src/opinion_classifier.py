@@ -66,7 +66,7 @@ class OpinionClassifier:
     #     results = self.structured_llm.invoke(prompt)
     #     return results.reasoning, results.delta_opinion # type: ignore
     
-    def batch_classify(self, list_of_agent: list[Agent], list_of_new_activity: list[dict], batch_size: int = 20):
+    def batch_classify(self, list_of_agent: list[Agent], list_of_new_activity: list[dict], batch_size: int = 50):
         def chunks(iterable, size):
             it = iter(iterable)
             while True:

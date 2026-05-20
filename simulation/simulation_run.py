@@ -194,9 +194,9 @@ def main():
 
     # INITATE AGENTS
 
-    summarize_batch = 30
+    summarize_batch = 50
     initiate_track = 0
-    max_concurrency = 25
+    max_concurrency = 30
     
     with ctx as cb:
         logger.info(f"Initate agents data...")
