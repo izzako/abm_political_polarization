@@ -213,5 +213,10 @@ persona/
 outputs/
 outputs_*/
 logs/
-data/ground_truth/
+data/ground_truth*
 abm_*.o*
+*.bib
+writing_prompt.MD
+figures/
+litrev/
+writing_prompt.MD

@@ -39,7 +39,7 @@ def main():
     
     start = datetime.strptime('2024-02-01 00:00:00', '%Y-%m-%d %H:%M:%S')
     init_days = int(srconst.get('init_days','SIMULATION'))
-
+    end_date = srconst.get('end_datetime','SIMULATION')
     # PARAMS
 
     stubborn_weights = {
@@ -112,14 +112,14 @@ def main():
         W[i,:] = W[i,:]/row_sums[i]
 
     #  Initialize self persistent matrix
-    Lambda = build_stubbornness_matrix(interaction_df, user_to_idx, stubborn_weights)
+    Lambda = build_stubbornness_matrix(initialize_sim_interaction_data, user_to_idx, stubborn_weights)
 
     # Initialize Weight
-    X0 = initialize_opinions_with_retweets(sim_text_data, sim_interaction_data, user_to_idx, init_days)
+    X0 = initialize_opinions_with_retweets(sim_text_data, initialize_sim_interaction_data, user_to_idx, init_days)
 
-    end_date = '2024-02-28'
+    
     date_0 = pd.Timestamp(f'2024-02-{str(init_days).zfill(2)} 21:36:00')
-    x_date = pd.date_range((date_0+pd.Timedelta(days=1)).date(),end_date,freq='2.4h') #ganti ini lagi ke tgl 28
+    x_date = pd.date_range((date_0+pd.Timedelta(days=1)).date(),end_date,freq='2.4h',inclusive='left') #ganti ini lagi ke tgl 28
     step = len(x_date)
     hist_X = [X0]
     Alpha = np.identity(len(list_agents))-Lambda

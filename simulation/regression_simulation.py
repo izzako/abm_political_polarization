@@ -67,7 +67,7 @@ def get_real_historical(user, sim_interaction_data, sim_text_data,
     )
     df_user['datetime'] = pd.to_datetime(df_user['datetime'].dt.date)
 
-    end = pd.to_datetime("2024-02-28 00:00:00")
+    end = pd.to_datetime("2024-02-29 00:00:00")
     base_date = pd.to_datetime("2024-02-01 00:00:00")
 
     # --- Handle init-days collapsing -----------------------------------------
@@ -89,7 +89,7 @@ def get_real_historical(user, sim_interaction_data, sim_text_data,
         )
 
         df_user_full = pd.DataFrame(
-            pd.date_range(start, end), columns=['datetime']
+            pd.date_range(start, end,inclusive='left'), columns=['datetime']
         ).merge(df_user2, how='left', on='datetime')
 
         df_user_full.loc[0, 'sentiment_label'] = avg_sentiment_before_start
@@ -102,7 +102,7 @@ def get_real_historical(user, sim_interaction_data, sim_text_data,
             else pd.DataFrame(columns=['datetime', 'sentiment_label'])
         )
         df_user_full = pd.DataFrame(
-            pd.date_range(start, end), columns=['datetime']
+            pd.date_range(start, end,inclusive='left'), columns=['datetime']
         ).merge(df_user2, how='left', on='datetime')
         df_user_full['sentiment_label'] = df_user_full['sentiment_label'].ffill().bfill()
 
@@ -464,7 +464,7 @@ def main():
     print(f"Total agents: {len(list_agents)}")
 
     # ---- Time index (daily buckets, Feb 1 – Feb 28) -------------------------
-    time_index = pd.date_range("2024-02-01", "2024-02-28", freq="1D")
+    time_index = pd.date_range("2024-02-01", "2024-02-29",inclusive='left', freq="1D")
     train_cutoff = pd.Timestamp(f"2024-02-{str(train_cutoff_day).zfill(2)}")
     train_steps = int((train_cutoff - time_index[0]).days)
     # Since build_agent_dataset starts at t=1, effective training samples = train_steps - 1
@@ -520,9 +520,9 @@ def main():
     #   columns after melt: datetime, topic, agent, opinion_weight
 
     start = datetime.strptime('2024-02-01 00:00:00', '%Y-%m-%d %H:%M:%S')
-    end_date = '2024-02-28'
+    end_date = '2024-02-29'
     date_0 = pd.Timestamp(f'2024-02-{str(init_days).zfill(2)} 21:36:00')
-    x_date = pd.date_range((date_0 + pd.Timedelta(days=1)).date(), end_date, freq='2.4h')
+    x_date = pd.date_range((date_0 + pd.Timedelta(days=1)).date(), end_date,inclusive='left', freq='2.4h')
     step = len(x_date)
 
     # First row = averaged seed opinion (opinion at init_days, i.e. the collapsed

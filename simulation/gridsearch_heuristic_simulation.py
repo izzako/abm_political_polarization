@@ -22,7 +22,12 @@ def main():
 
     TEMP_CONFIG_PATH = 'configs/temp_fj_config.ini'
     MODEL = 'Friedkin-Johnsen'
-    h_timestep=201
+    
+    
+    init_days = 11
+    end_train = 15
+    date_0 = pd.Timestamp(f'2024-02-{str(init_days).zfill(2)} 21:36:00')
+    h_timestep=len(pd.date_range((date_0+pd.Timedelta(days=1)).date(), f'2024-02-{end_train}',freq='2.4h',inclusive='left')) #ganti ini lagi ke tgl 28
 
 
     config = configparser.ConfigParser()
@@ -36,11 +41,13 @@ def main():
     
     # loop
     for topic in ['all','0','1','2','3','4']:
+        
         gridsearch_df = []
         print('topic:',topic)
         config['SIMULATION'] = {
-            'init_days': '7',
+            'init_days': str(init_days),
             'topic_num': topic,
+            'end_datetime': f'2024-02-{end_train}'
         }
         log_file = f'logs/gridsearch/log_{topic}.txt'
         os.makedirs(os.path.dirname(log_file), exist_ok=True)
@@ -79,15 +86,18 @@ def main():
                                 df_model2 = df_model.groupby(['date','agent'],as_index=False)['opinion_weight'].mean()
 
 
-                                ground_df = pd.read_csv(f'data/ground_truth/baseline_{topic}.csv',sep=';')
+                                ground_df = pd.read_csv(f'data/ground_truth_gs/baseline_{topic}.csv',sep=';')
                                 ground_df = ground_df.rename(columns={'datetime':'date','sentiment_label':"opinion_weight"}).copy()
                                 ground_df = ground_df.sort_values(['date','agent'],ignore_index=True).copy()
                                 
                                 linew = []
-                                for date in range(6,9):
-                                    temp_date = '2024-02-'+str(date+1).zfill(2)
+                                for date in range(init_days+1,end_train):
+                                    temp_date = '2024-02-'+str(date).zfill(2)
+                                    # print(temp_date)
                                     A = ground_df.loc[pd.to_datetime(ground_df['date'])==temp_date,'opinion_weight']
+                                    # print('A',len(A))
                                     B = df_model2.loc[pd.to_datetime(df_model2['date'])==temp_date,'opinion_weight']
+                                    # print('B',len(B))
                                     w = wasserstein_distance(A, B)
                                     linew.append(round(w,5))
                                 mae0 = np.average(np.abs(linew))
