@@ -32,7 +32,7 @@ class OpinionClassifier:
         self.structured_llm = self.llm.with_structured_output(OpinionClassifierSchema) # type: ignore
         self.topic = topic
         if self.topic == 'all':
-            self.topic = 'Indonesian Politics'
+            self.topic = 'Indonesian Politics on Election'
         prompt_path = get('prompt_path',"PROMPT_PATH")
 
         self.template =  PromptTemplate(
@@ -66,7 +66,7 @@ class OpinionClassifier:
     #     results = self.structured_llm.invoke(prompt)
     #     return results.reasoning, results.delta_opinion # type: ignore
     
-    def batch_classify(self, list_of_agent: list[Agent], list_of_new_activity: list[dict], batch_size: int = 50):
+    def batch_classify(self, list_of_agent: list[Agent], list_of_new_activity: list[dict], batch_size: int = 70):
         def chunks(iterable, size):
             it = iter(iterable)
             while True:
