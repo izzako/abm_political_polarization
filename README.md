@@ -1,6 +1,6 @@
-# How Faithful Are LLM Agents? Benchmarking Opinion Dynamics Against Indonesian Electoral Discourse on Social Media
+# How Good Are LLM Agents? Benchmarking Opinion Dynamics Against Indonesian Electoral Discourse on Social Media
 
-This repository contains the code and configuration for the paper *"How Faithful Are LLM Agents? Benchmarking Opinion Dynamics Against Indonesian Electoral Discourse on Social Media"*. We benchmark three open-weight LLMs (Gemma-3-12B, Qwen3-8B, Nemotron-Nano-8B) against Friedkin-Johnsen and per-agent Ridge regression on 1,000 Twitter users and 70,336 interactions from the 2024 Indonesian Presidential Election.
+This repository contains the code and configuration for the paper *"How Good Are LLM Agents? Benchmarking Opinion Dynamics Against Indonesian Electoral Discourse on Social Media"*. We benchmark three open-weight LLMs (Gemma-3-12B, Qwen3-8B, Nemotron-Nano-8B) against Friedkin-Johnsen and per-agent Ridge regression on 1,000 Twitter users and 70,336 interactions from the 2024 Indonesian Presidential Election.
 
 ## Repository Structure
 
